@@ -1,72 +1,81 @@
 ![Torque Logo](images/banner1.png)
-## Torque2D 4.0 Early Access 4
 
-MIT Licensed Open Source version of Torque2D from GarageGames. Maintained by the Torque Game Engines team and contributions from the community.
+# Torque2D 4.0 (EA4 + `development`) — OpenGL 4.6 Edition
 
-Dedicated to 2D game development, Torque 2D is an extremely powerful, flexible, and fast C++ engine which has been used in hundreds of professional games. It is a true cross platform solution providing you access to Windows, OSX, Linux, iOS, Android, and the web - all from one codebase. It includes an OpenGL 4.6 Core / OpenGL ES 3.2 batched rendering system, Box2D physics, OpenAL audio, skeletal and spritesheet animation, automated asset management, a modular project structure, TAML object persistence, and a C-like scripting language.
+A modernized, 64-bit standalone custom engine build of **Torque2D 4.0**, based on **Early Access 4 (`master`)** merged with **31 upstream `development` commits** and upgraded with a **local OpenGL 4.6 Core Profile rendering migration**.
 
-### What's New?
+> **Standalone Build Notice:** This repository is maintained as a standalone OpenGL 4.6 C++17 engine build derived from Torque2D 4.0, built locally via CMake rather than distributed as official upstream precompiled binaries.
 
-Torque2D 4.0: Rocket Edition is currently in progress. The major change with 4.0 is the addition of editors! At this time there is a working Asset Manager and Project Manager. The Asset Manager allows a user to create, edit, and remove images, animations, particle effects, bitmap fonts, and audio assets. This represents a major step forward from editing xml files by hand. This is especially useful in the case of particle effects which are nearly impossible to create without an interactive tool. The Project Manager allows users to manager the modules in their game directly in a user interface. This is paired with a library of re-usable modules that can be imported into a game.
+---
 
-The managers can be reached by opening the console using the console button in the Toybox or by pressing Tilde(~) + Ctrl. You will then notice tabs along that top for the various tools currently available.
+## Key Enhancements in This Build
 
-Early Access 4 builds out the **GUI Editor** that Early Access 3 introduced. You build a screen by dragging controls from an illustrated palette onto the canvas, or by clicking one to have it placed for you, and arrange them by dragging, by the arrow keys, or through the Layout menu's align and spacing commands. There is undo and redo, and cut, copy and paste work within a Gui and between them.
+### OpenGL 4.6 Rendering Migration
 
-Around the canvas sit two more panels. The **Explorer** shows the whole control tree, with a picture of each control's class, columns for hiding and locking, and drag-to-reparent. The **properties pane** shows only the fields the selected control's class actually reads — a chain never draws its own text, so it is not offered nine text fields it will ignore — and gives the common ones purpose-built editors rather than text boxes: an anchor picker for sizing, color swatches, an image picker you choose by looking at it, and editors for the things that used to be unreachable from an editor at all, such as a list box's rows and a menu bar's items.
+The legacy fixed-function OpenGL 1.x / OpenGL ES 1.1 renderer has been migrated to a programmable OpenGL 4.6 Core Profile (desktop) and OpenGL ES 3.2 (mobile) pipeline. See [opengl_migration_report.txt](opengl_migration_report.txt) (and [opengl_migration_report.pdf](opengl_migration_report.pdf)) for full migration notes.
 
-Guis are saved as either the classic `.gui` script or TAML, and the editor says which one loses what before you pick. A Gui you have changed is not thrown away without being asked about.
+* **Custom Macro-Driven Function Loader (No GLAD/GLEW):** GL entry points are declared via internal platform macro tables ([`GLCoreFunc.h`](engine/source/platform/GLCoreFunc.h), [`GLModernFunc.h`](engine/source/platform/GLModernFunc.h) groups `GL_CORE_PROGRAMMABLE`, `GL_CORE_TEX_STORAGE`, `GL_CORE_DSA`, and [`GLModernTypes.h`](engine/source/platform/GLModernTypes.h)):
+  * **Windows ([`winGL.cc`](engine/source/platformWin32/winGL.cc)):** Loads `opengl32` and `glu32` via `LoadLibrary`, resolves functions through `wglGetProcAddress` with `GetProcAddress` fallback, enumerates Core Profile extensions via `glGetStringi(GL_EXTENSIONS, ...)` when `glMajorVersion >= 3`, and records capabilities in `gGLState`.
+  * **Linux ([`x86UNIXGL.cc`](engine/source/platformX86UNIX/x86UNIXGL.cc)):** Loads `libGL.so` / `libGL.so.1` through SDL 2 (`SDL_GL_LoadLibrary`) and resolves modern GL / DSA entry points via `SDL_GL_GetProcAddress`.
+* **Context & Profile Architecture:**
+  * **Windows ([`winOGLVideo.cc`](engine/source/platformWin32/winOGLVideo.cc)):** Creates a bootstrap WGL context, resolves `wglCreateContextAttribsARB`, and upgrades to a **Core Profile** context (`WGL_CONTEXT_CORE_PROFILE_BIT_ARB`) across versions **4.6 → 4.5 → 4.3 → 4.1 → 3.3**, setting `gGLState.isCoreProfile = true` (`OpenGLDevice::getDriverInfo()` reports `CORE_PROFILE` on GL 3.0+).
+  * **Linux ([`x86UNIXOGLVideo.cc`](engine/source/platformX86UNIX/x86UNIXOGLVideo.cc)):** Uses SDL 2 (`SDL_WINDOW_OPENGL` + `SDL_GL_CreateContext`) and binds modern GL / DSA functions in `GL_EXT_Init()`, using `SDL_GL_SetSwapInterval` for vsync/swap control.
+  * **Mobile & Web Targets:** Targets **OpenGL ES 3.2** (`#version 320 es` with `highp` precision qualifiers) on Android/iOS (Android links `GLESv3` via [`AndroidGL2ES.h`](engine/source/platformAndroid/AndroidGL2ES.h)), and configures Emscripten builds with `-sUSE_SDL=2`, `-sMIN_WEBGL_VERSION=2`, and `-sMAX_WEBGL_VERSION=2` (noting explicit WebGL 2 SDL GL attribute setup in [`EmscriptenOGLVideo.cpp`](engine/source/platformEmscripten/EmscriptenOGLVideo.cpp) remains a tracked follow-up in [opengl_migration_report.txt](opengl_migration_report.txt)).
+* **Programmable Shader & Streaming Batch Pipeline ([`ShaderManager.h`](engine/source/graphics/ShaderManager.h), [`ShaderManager.cc`](engine/source/graphics/ShaderManager.cc)):** Replaces fixed-function state with a built-in GLSL uber-shader (`#version 460 core` on GL 4.6 desktop; `#version 320 es` on ES 3.2) exposing `uMVP`, `uModelView`, `uTexture0`, `uTexMode` (`DGLTexMode`: none, modulate, blend, replace, add), `uTexEnvColor`, `uAlphaThreshold`, and 4 eye-space clip planes (`uClipPlaneCount`, `uClipPlanes[4]`). Renders interleaved `DGLVertex` geometry (position, texCoord, color) through persistent dynamic VAO/VBO/IBO objects (`sDynamicVAO`, `sDynamicVBO`, `sDynamicIBO`) with `GL_STREAM_DRAW` buffer orphaning, wireframe line expansion, and triangle conversion helpers for `GL_QUADS`, `GL_QUAD_STRIP`, and `GL_POLYGON`.
+* **Direct State Access ([`glDSA.h`](engine/source/graphics/glDSA.h), [`glDSA.cc`](engine/source/graphics/glDSA.cc)):** `GLDSA` dispatches to OpenGL 4.5+ DSA functions (`glCreateBuffers`, `glNamedBufferData`, `glNamedBufferSubData`, `glCreateVertexArrays`, `glCreateTextures`, `glTextureStorage2D`, `glTextureSubImage2D`, `glTextureParameteri`, `glTextureParameteriv`, `glBindTextureUnit`) when `gGLState.suppDSA` is active on Windows (`TORQUE_OS_WIN`) and Linux (`TORQUE_OS_LINUX`), falling back seamlessly to bind-based calls on ES 3.2, macOS, and pre-4.5 drivers.
+* **CPU Matrix Stacks & Core Textures ([`dglMatrix.cc`](engine/source/graphics/dglMatrix.cc), [`TextureManager.cc`](engine/source/graphics/TextureManager.cc), [`TextureHandle.cc`](engine/source/graphics/TextureHandle.cc)):** Replaces deprecated GL matrix stacks with 32-deep CPU `MODELVIEW`/`PROJECTION`/`TEXTURE` stacks (`uMVP`/`uModelView`, `dglPointToScreen`), glyph batching (`flushGlyphBatch`), Core/ES sized internal texture formats (`GL_R8`, `GL_RG8`, `GL_RGB8`, `GL_RGBA8`, `GL_RGB565`, `GL_RGB5_A1`, `GL_RGBA4`), `GL_TEXTURE_SWIZZLE_R/G/B/A`, and `GL_CLAMP_TO_EDGE` across migrated 2D and GUI rendering paths.
+* **Migration Unit Tests ([`openglMigrationTests.cc`](engine/source/testing/tests/openglMigrationTests.cc)):** Includes 7 GoogleTest unit tests covering GLSL `#version` preprocessing, `DGLVertex` layout, CPU matrix math, `GLDSA` fallbacks, and state tracking.
 
-Controls take their appearance from a **theme** rather than from profiles you wire up by hand. The **Gui Profile Editor** is where a theme is authored — profiles, borders, fonts and colors, against a live preview — and a control dropped onto the canvas arrives already wearing the right one. Set Theme re-skins an entire Gui.
+### Upstream `development` Integration (31 Commits on 4.0 EA4)
 
-The Rocket Edition also features a revamped Gui System! Until now it has been a common practice among those seriously using T2D to avoid the Gui System as much as possible. We aim to fix that with the Rocket Edition. Explanation of how to use the updated Gui System can be found in the wiki in the [Gui Guide](https://github.com/TorqueGameEngines/Torque2D/wiki/GUI-Guide).
+Merged 31 upstream `development` commits onto the Torque2D 4.0 Early Access 4 (`master`) foundation:
 
-The rendering backend has been migrated from legacy fixed-function OpenGL 1.x / OpenGL ES 1.1 to **OpenGL 4.6 Core Profile** (`#version 460 core`) on desktop and **OpenGL ES 3.2** (`#version 320 es` with highp precision qualifiers) on Android/mobile, with WebGL 2 shader flags (`-sMIN_WEBGL_VERSION=2` / `-sMAX_WEBGL_VERSION=2`) integrated with SDL 2 on Emscripten. Rendering runs through `ShaderManager` programmable shaders with VAO/VBO/IBO streaming batching, `GLDSA` Direct State Access wrappers (with bind-based fallbacks for GLES 3.2 and ANGLE/macOS), and CPU `dgl` matrix stacks. See [opengl_migration_report.txt](opengl_migration_report.txt) (and [opengl_migration_report.pdf](opengl_migration_report.pdf)) for architecture, merged changes, and verification details.
+* **SDL 2.32.10 Backend:** Vendored static SDL 2.32.10 support (`platformSDL`) for Linux and Emscripten, alongside Linux tiling-WM, fullscreen, scroll-wheel, and UTF-8 text input fixes.
+* **GUI & Font Fixes:** Added `textRotation` support, tooltip profile fixes, focus/first-responder fixes, `GuiScrollCtrl` / `textWrap` / `textExtend` sizing fixes, and theme font rebaking.
+* **Platform & Test Fixes:** Integrated the Windows [`winFileio.cc`](engine/source/platformWin32/winFileio.cc) case-sensitive `StringTable` scan fix as well as particle unit tests (`particleAssetFieldTests.cc`, `particleEmissionAngleTests.cc`).
 
-More features and editors are coming before 4.0 is officially done, but new projects should make use of the Early Access version to avoid future conflicts.
+### 64-Bit Windows & Linux Platform Support
 
-### Branches
+* **Windows (x64):** Built as C++17 with MSVC static runtime (`/MT`), `/Zc:wchar_t-`, and `_HAS_STD_BYTE=0`. On 64-bit builds (`CMAKE_SIZEOF_VOID_P == 8`), `POST_BUILD` automatically stages `engine/lib/openal/win64/OpenAL32.dll` alongside the executable at the repository root.
+* **Linux (x86_64):** Automatically defines `LINUX`, `TORQUE_SDL`, and `TORQUE_64` on 64-bit targets, linking vendored static SDL 2.32.10 (`SDL2::SDL2-static`) with `Threads::Threads`, `OpenGL::GL`, `Freetype::Freetype`, `X11`, `Xft`, `fontconfig`, `openal`, `m`, `dl`, and `rt`.
 
-Here is an overview of the branches found in the Torque2D repository:
+---
 
-* **master:** this branch contains the current stable release code that can be used in a production environment.
-* **development:** this branch is dedicated to active development. It contains the latest bug fixes, new features, and other updates. All pull requests need to go to the development branch. While we try our best to test all incoming changes, it is possible for mistakes to slip in therefore this branch should always be considered unstable.
-* **gh-pages:** this branch currently contains the html pages generated from doxygen for the engine and TorqueScript references.
+## Building from Source (CMake)
 
-### Precompiled Version
+[**CMakeLists.txt**](CMakeLists.txt) is the single source of truth for configuring and building the engine (`Debug`, `Release`, and `Shipping` configurations, C++17). The legacy hand-maintained project files under `engine/compilers/` have been retired.
 
-If you do not wish to compile the source code yourself, precompiled binary files for Windows and OSX are available from the [Torque 2D Release Page](https://github.com/TorqueGameEngines/Torque2D/releases).
+### Quick Release Build (Out-of-Source)
 
-### Building the Source
+Configure and build the **Release** binary out-of-source from the repository root:
 
-**CMake is the single source of truth for the build.** You generate a project for your platform/toolchain from the root `CMakeLists.txt` and build it; the compiled executable is written to the repository root. Convenience generator scripts live at the repo root:
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release --parallel
+```
 
-* **Windows:** `generate-vs2022.bat` (or `generate-vs2026.bat`) → a Visual Studio solution
-* **macOS:** `generate-xcode.command` → an Xcode project
-* **Linux:** `build-linux.sh` (configures and builds; 32- and 64-bit)
-* **iOS:** `generate-xcode-ios.command` (simulator) or `generate-xcode-ios-device.command` (device)
-* **Android:** open `engine/compilers/android-studio` in Android Studio — its Gradle build drives CMake via the NDK
-* **Web:** `generate-emscripten.sh` → a WebAssembly build via `emcmake` (requires the Emscripten SDK)
+> **Generator Notes:**
+> * Single-config generators (Ninja, Unix Makefiles on Linux) use `-DCMAKE_BUILD_TYPE=Release` during configure.
+> * Multi-config generators (Visual Studio on Windows) select the build type via `--config Release` at build time (add `-A x64` if your Visual Studio generator requires an explicit 64-bit architecture flag).
+> * **Output Location:** Desktop binaries are written directly to the repository root (`Torque2D.exe` / `Torque2D_DEBUG.exe` with `OpenAL32.dll` on Windows; `Torque2D` / `Torque2D_DEBUG` on Linux) alongside `main.cs`.
 
-The hand-maintained per-platform project files that used to live in `engine/compilers/` have been removed — CMake replaces them. For full step-by-step build instructions on every platform, see the [Torque2D wiki](https://github.com/TorqueGameEngines/Torque2D/wiki) (the *Building from Source* guide).
+### CMake Targets
 
-#### Generating a Visual Studio solution with CMake
+* **`Torque2D` (Primary Target):** Engine executable on Windows, Linux, macOS, iOS, and Emscripten; `libtorque2d.so` `SHARED` library on Android ([`cmake/EngineSources.cmake`](cmake/EngineSources.cmake), [`cmake/PlatformSources.cmake`](cmake/PlatformSources.cmake)).
+* **Bundled Static Libraries ([`engine/lib/CMakeLists.txt`](engine/lib/CMakeLists.txt)):** `SDL2::SDL2-static` (Linux), `zlib` (non-Android), `libogg`, `libvorbis`, `lpng`, `ljpeg`, and `gtest` (desktop builds).
 
-Generating a fresh, always-up-to-date Visual Studio solution from CMake takes just a few steps. You do **not** need to know anything about CMake to do this.
+### Platform Convenience Scripts
 
-1. **Install Visual Studio 2022 or Visual Studio 2026** (Community Edition is fine). In the Visual Studio Installer, make sure the **"Desktop development with C++"** workload is checked.
-2. **Install CMake** from [cmake.org/download](https://cmake.org/download/) (CMake 4.x or newer is required for Visual Studio 2026). On the *Install Options* screen, choose **"Add CMake to the system PATH for all users"** (or for the current user). This one-time step is what lets the generator find CMake.
-3. In the root of the repository, **double-click `generate-vs2022.bat` or `generate-vs2026.bat`**. It creates the solution under `build\vs2022\` or `build\vs2026\` and opens `Torque2D.sln` in Visual Studio. (If CMake or the C++ workload is missing, the script tells you what to fix.)
-4. In Visual Studio, choose a configuration (**Debug** or **Release**) at the top, then build with **Build → Build Solution** (`Ctrl+Shift+B`), or build from CMake directly (`cmake --build build\vs2026 --config Release --parallel`).
-5. The compiled executable is written to the repository root (`Torque2D_DEBUG.exe` for Debug, `Torque2D.exe` for Release). Run it from there (press **F5** in Visual Studio, which is already set to launch from the repo root).
+Convenience wrappers live at the repository root (see [`cmake/BUILD-PLATFORM-NOTES.md`](cmake/BUILD-PLATFORM-NOTES.md) for full platform prerequisites):
 
-Whenever the engine's source file list changes (for example after pulling new changes), just **re-run `generate-vs2022.bat` or `generate-vs2026.bat`** to regenerate the solution.
+* **Windows (Visual Studio 2022 / 2026):** [`generate-vs2022.bat`](generate-vs2022.bat) or [`generate-vs2026.bat`](generate-vs2026.bat) generates `build\vs2022\` or `build\vs2026\` with `Torque2D.sln` ready to run from the repo root.
+* **Linux:** [`build-linux.sh`](build-linux.sh) (full configure + build) or [`generate-make.sh`](generate-make.sh) (Makefile generation).
+* **macOS / iOS:** [`generate-xcode.command`](generate-xcode.command), [`generate-xcode-ios.command`](generate-xcode-ios.command), [`generate-xcode-ios-device.command`](generate-xcode-ios-device.command).
+* **WebAssembly (Emscripten):** [`generate-emscripten.sh`](generate-emscripten.sh) (via `emcmake`).
 
-See the [wiki](https://github.com/TorqueGameEngines/Torque2D/wiki) for available guides on platform setup and development.
+### Running the Tests
 
-#### Running the Tests
-
-After building `Torque2D_DEBUG.exe` (or `Torque2D.exe` for `-Release` unit runs) in the repository root, run the automated test suites with PowerShell 7 (`pwsh`):
+After building `Torque2D_DEBUG.exe` (or `Torque2D.exe` for `-Release`) at the repository root, run the automated suites using PowerShell 7 (`pwsh`) on Windows (or [`tests/run.sh`](tests/run.sh) on Unix):
 
 * **C++ unit tests (GoogleTest, Debug):** `pwsh -ExecutionPolicy Bypass -File tests\run-unit.ps1`
 * **C++ unit tests (GoogleTest, Release):** `pwsh -ExecutionPolicy Bypass -File tests\run-unit.ps1 -Release`
@@ -74,26 +83,43 @@ After building `Torque2D_DEBUG.exe` (or `Torque2D.exe` for `-Release` unit runs)
 
 Logs are written under `tests\logs\`.
 
-### Batteries Included
+---
 
-When you first run Torque2D, you'll have the option to create a project or open the Toybox. The Toybox is a collection of over 30 simple "toys" (or modules) which demonstrate various features in T2D. The default toy is a side scrolling level with a monster truck. To see a list of the available modules/toys to choose from, click on the `Show Tools` button in the lower right corner of the screen.
+## Torque2D 4.0 Overview & Features
 
-Naturally all of the script code and assets for each toy are available to you in the toybox folder to use as practical examples while learning T2D.
+Dedicated to 2D game development, **Torque2D** is a flexible C++ engine combining OpenGL 4.6 Core / OpenGL ES 3.2 batched 2D rendering, Box2D physics, OpenAL audio, skeletal and spritesheet animation, automated asset management, a modular project structure, TAML object persistence, and TorqueScript ([`TORQUE_SCRIPT.md`](TORQUE_SCRIPT.md)).
 
-### Documentation
+### Editors & GUI System (4.0 Early Access 4)
 
-All documentation for the Torque2D can be found on our [Github wiki page](https://github.com/TorqueGameEngines/Torque2D/wiki). It contains many tutorials, detailed technical information on engine systems, a script reference guide automatically generated from the source code, and articles on how to contribute to our open source development.
+Torque2D 4.0 (*Rocket Edition*) integrates interactive in-engine editors directly inside the console/tool bar (`Tilde (~) + Ctrl` or the console button in the Toybox):
 
-### Community
+* **Asset Manager & Project Manager:** Create, edit, and organize images, animations, particle effects, bitmap fonts, audio assets, and reusable game modules without hand-editing XML files.
+* **GUI Editor:** Drag-and-drop or click-to-place controls onto the canvas, align/space controls via the Layout menu, undo/redo, and cut/copy/paste across GUIs.
+* **Explorer & Context-Aware Properties Pane:** Inspect the control tree with hide/lock columns and drag-to-reparent, paired with purpose-built property editors (anchor picker, color swatches, visual image picker, list-box row and menu-bar item editors) tailored to each control class.
+* **Classic `.gui` & TAML Persistence:** Save GUIs either as classic `.gui` scripts or TAML with unsaved-change protection.
+* **Theme & Gui Profile Editor:** Author reusable control themes (profiles, borders, fonts, colors) with live preview and re-skin entire GUIs via Set Theme. See the upstream [Gui Guide](https://github.com/TorqueGameEngines/Torque2D/wiki/GUI-Guide) for usage details.
 
-Don't go it alone! Join the active Torque community. Ask questions, talk about T2D and general game development topics, learn the latest news, or post a blog promoting your game or showing off additional engine features in your T2D fork.
+### Batteries Included (Toybox)
 
-* [Torque 2D Forums on the Torque Game Engines Website](https://torque3d.org/forums/forum/26-general/)
+When you first run Torque2D, you can create a new project or open the **Toybox**, a collection of over 30 sample "toys" (modules) demonstrating Torque2D features—starting from the default monster truck side-scrolling demo. Click **Show Tools** in the lower-right corner to browse toys, and inspect each toy's scripts and assets under the `toybox/` directory as practical examples.
+
+### Documentation & Community
+
+* [Torque2D GitHub Wiki](https://github.com/TorqueGameEngines/Torque2D/wiki) — tutorials, architecture notes, script reference, and guides
+* [Changelog](CHANGELOG.md) — release and engine history
+* [Torque 2D Forums on Torque Game Engines](https://torque3d.org/forums/forum/26-general/)
 * [Torque Game Engines on Discord](https://discord.com/invite/qdAZxT4)
 
-Please note that the GarageGames website is gone. The options above both represent great ways to get help if you need it.
+*(Note: The original GarageGames website is offline; the links above are the active upstream community hubs.)*
 
-# License
+---
+
+## Credits & Upstream Attribution
+
+* **Upstream Engine:** Built upon **Torque2D** created by **GarageGames, LLC** and maintained by **TorqueGameEngines** and the open-source community ([TorqueGameEngines/Torque2D](https://github.com/TorqueGameEngines/Torque2D)).
+* **This Build:** Maintained independently as a standalone 64-bit custom **OpenGL 4.6** engine build incorporating Torque2D 4.0 EA4 (`master`), 31 upstream `development` commits, and local OpenGL 4.6 migration upgrades under the original **MIT License** ([`LICENSE.md`](LICENSE.md)).
+
+## License
 
 Copyright (c) 2012 GarageGames, LLC
 
