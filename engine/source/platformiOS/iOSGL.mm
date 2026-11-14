@@ -80,7 +80,42 @@ void getGLCapabilities( )
    const char* pVendString    = (const char*) glGetString( GL_VENDOR );
    const char* pRendString    = (const char*) glGetString( GL_RENDERER );
    const char* pVersString    = (const char*) glGetString( GL_VERSION );
-   const char* pExtString     = (const char*) glGetString( GL_EXTENSIONS );
+
+   gGLState.suppDSA = false;
+   gGLState.suppTexStorage = true;
+   gGLState.isCoreProfile = false;
+   gGLState.glMajorVersion = 3;
+   gGLState.glMinorVersion = 0;
+   glGetIntegerv(GL_MAJOR_VERSION, &gGLState.glMajorVersion);
+   glGetIntegerv(GL_MINOR_VERSION, &gGLState.glMinorVersion);
+
+   static char sExtBuffer[8192];
+   sExtBuffer[0] = '\0';
+   const char* pExtString = NULL;
+   if (gGLState.glMajorVersion >= 3)
+   {
+      GLint numExtensions = 0;
+      glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+      U32 offset = 0;
+      for (GLint i = 0; i < numExtensions; ++i)
+      {
+         const char* ext = (const char*) glGetStringi(GL_EXTENSIONS, (GLuint) i);
+         if (!ext)
+            continue;
+         const U32 extLen = dStrlen(ext);
+         if (offset + extLen + 2 >= sizeof(sExtBuffer))
+            break;
+         dMemcpy(sExtBuffer + offset, ext, extLen);
+         offset += extLen;
+         sExtBuffer[offset++] = ' ';
+         sExtBuffer[offset] = '\0';
+      }
+      pExtString = sExtBuffer;
+   }
+   else
+   {
+      pExtString = (const char*) glGetString( GL_EXTENSIONS );
+   }
 
    // Output some driver info to the console:
    Con::printf( "OpenGL driver information:" );

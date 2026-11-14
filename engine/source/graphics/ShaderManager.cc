@@ -275,8 +275,14 @@ GLuint compileShader(GLenum shaderType, const char* shaderBody)
    const bool isGLES = false;
 #endif
 
+#if defined(TORQUE_OS_IOS) || defined(TORQUE_OS_EMSCRIPTEN)
+   const U32 defaultGLESMinor = 0U;
+#else
+   const U32 defaultGLESMinor = 2U;
+#endif
+
    const U32 majorVer = (gGLState.glMajorVersion >= 3) ? (U32)gGLState.glMajorVersion : (isGLES ? 3U : 4U);
-   const U32 minorVer = (gGLState.glMajorVersion >= 3) ? (U32)gGLState.glMinorVersion : (isGLES ? 2U : 6U);
+   const U32 minorVer = (gGLState.glMajorVersion >= 3) ? (U32)gGLState.glMinorVersion : (isGLES ? defaultGLESMinor : 6U);
 
    char sourceBuf[8192];
    if (!buildPreprocessedSource(shaderBody, isGLES, majorVer, minorVer, sourceBuf, sizeof(sourceBuf)))

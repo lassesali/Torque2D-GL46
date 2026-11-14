@@ -23,6 +23,9 @@
 // Many OSX frameworks include OpenTransport, and OT's new operator conflicts 
 // with our redefinition of 'new', so we have to pre-include platformMacCarb.h,
 // which contains the workaround.
+#ifndef GL_SILENCE_DEPRECATION
+#define GL_SILENCE_DEPRECATION
+#endif
 #include <OpenGL/OpenGL.h>
 #include "platformOSX/platformOSX.h"
 #include "platformOSX/platformGL.h"
@@ -92,6 +95,38 @@ void dglSetFSAASamples(GLint aasamp)
 }
 
 
+static CGLContextObj createCGLContextWithAttributes(const CGLPixelFormatAttribute* attribs)
+{
+    GLint numPixelFormats = 0;
+    CGLPixelFormatObj pixelFormat = NULL;
+    CGLChoosePixelFormat(attribs, &pixelFormat, &numPixelFormats);
+    if (!pixelFormat)
+        return NULL;
+
+    CGLContextObj ctx = NULL;
+    CGLCreateContext(pixelFormat, NULL, &ctx);
+    CGLDestroyPixelFormat(pixelFormat);
+    return ctx;
+}
+
+static bool hasGLExtension(const char* pExtString, const char* target)
+{
+    if (gGLState.glMajorVersion >= 3)
+    {
+        GLint numExtensions = 0;
+        glGetIntegerv(GL_NUM_EXTENSIONS, &numExtensions);
+        for (GLint i = 0; i < numExtensions; ++i)
+        {
+            const char* ext = (const char*)glGetStringi(GL_EXTENSIONS, (GLuint)i);
+            if (ext && dStrcmp(ext, target) == 0)
+                return true;
+        }
+        return false;
+    }
+
+    return pExtString && dStrstr(pExtString, target) != NULL;
+}
+
 //-----------------------------------------------------------------------------
 // helper function for getGLCapabilities.
 //  returns a new CGL context for platState.hDisplay
@@ -107,24 +142,27 @@ CGLContextObj getContextForCapsCheck()
     // From the CG display id, we can create a pixel format & context
     // and with that context we can check opengl capabilities
     CGOpenGLDisplayMask cglDisplayMask = CGDisplayIDToOpenGLDisplayMask([platState cgDisplay]);
-    CGLPixelFormatAttribute attribs[] = {kCGLPFADisplayMask, (CGLPixelFormatAttribute)cglDisplayMask, (CGLPixelFormatAttribute) NULL};
-
-    // create the pixel format. we will not use numPixelFormats, but the docs
-    // do not say we're allowed to pass NULL for the 3rd arg.
-    GLint numPixelFormats = 0;
-    CGLPixelFormatObj pixelFormat = NULL;
-    CGLChoosePixelFormat(attribs, &pixelFormat, &numPixelFormats);
-
-    if (pixelFormat)
+    const CGLPixelFormatAttribute profiles[] = {
+        (CGLPixelFormatAttribute)kCGLOGLPVersion_GL4_Core,
+        (CGLPixelFormatAttribute)kCGLOGLPVersion_3_2_Core
+    };
+    for (U32 i = 0; i < sizeof(profiles) / sizeof(profiles[0]); ++i)
     {
-        // create a context. we don't need the pixel format once the context is created.
-        CGLContextObj ctx;
-        CGLCreateContext(pixelFormat, NULL, &ctx);
-        CGLDestroyPixelFormat(pixelFormat);
-        
-        if (ctx)
+        CGLPixelFormatAttribute attribs[] = {
+            kCGLPFADisplayMask, (CGLPixelFormatAttribute)cglDisplayMask,
+            kCGLPFAOpenGLProfile, profiles[i],
+            (CGLPixelFormatAttribute)NULL
+        };
+        if (CGLContextObj ctx = createCGLContextWithAttributes(attribs))
             return ctx;
     }
+
+    CGLPixelFormatAttribute fallbackAttribs[] = {
+        kCGLPFADisplayMask, (CGLPixelFormatAttribute)cglDisplayMask,
+        (CGLPixelFormatAttribute)NULL
+    };
+    if (CGLContextObj ctx = createCGLContextWithAttributes(fallbackAttribs))
+        return ctx;
     
     // if we can't get a good context, we can't check caps... this won't be good.
     Con::errorf("getContextForCapsCheck could not create a cgl context on the display for gl capabilities checking!");
@@ -159,7 +197,6 @@ void getGLCapabilities()
     const char* pVendString = (const char*) glGetString(GL_VENDOR);
     const char* pRendString = (const char*) glGetString(GL_RENDERER);
     const char* pVersString = (const char*) glGetString(GL_VERSION);
-    const char* pExtString = (const char*) glGetString(GL_EXTENSIONS);
     
     // Output some driver info to the console:
     Con::printf("OpenGL driver information:");
@@ -172,62 +209,81 @@ void getGLCapabilities()
     
     // pre-clear the structure
     dMemset(&gGLState, 0, sizeof(gGLState));
+
+    while (glGetError() != GL_NO_ERROR) {}
+    GLint major = 0;
+    GLint minor = 0;
+    glGetIntegerv(GL_MAJOR_VERSION, &major);
+    glGetIntegerv(GL_MINOR_VERSION, &minor);
+    if (glGetError() == GL_NO_ERROR && major > 0)
+    {
+        gGLState.glMajorVersion = (int)major;
+        gGLState.glMinorVersion = (int)minor;
+    }
+    else if (pVersString)
+    {
+        dSscanf(pVersString, "%d.%d", &gGLState.glMajorVersion, &gGLState.glMinorVersion);
+    }
+
+    if (gGLState.glMajorVersion > 3 || (gGLState.glMajorVersion == 3 && gGLState.glMinorVersion >= 2))
+    {
+        GLint profileMask = 0;
+        glGetIntegerv(GL_CONTEXT_PROFILE_MASK, &profileMask);
+        if (glGetError() == GL_NO_ERROR)
+            gGLState.isCoreProfile = (profileMask & GL_CONTEXT_CORE_PROFILE_BIT) != 0;
+    }
+
+    // Apple OpenGL stops at 4.1 Core, so GL 4.5 DSA and GL 4.2 TexStorage are unavailable.
+    gGLState.suppDSA = false;
+    gGLState.suppTexStorage = false;
+
+    const bool isGL3OrHigher = (gGLState.glMajorVersion >= 3);
+    const char* pExtString = isGL3OrHigher ? NULL : (const char*) glGetString(GL_EXTENSIONS);
     
-    if (pExtString)
+    if (isGL3OrHigher || pExtString)
     {
         // EXT_paletted_texture ========================================
-        if (dStrstr(pExtString, (const char*)"GL_EXT_paletted_texture") != NULL)
-            gGLState.suppPalettedTexture = true;
+        gGLState.suppPalettedTexture = hasGLExtension(pExtString, "GL_EXT_paletted_texture");
         
         // EXT_compiled_vertex_array ========================================
-        gGLState.suppLockedArrays = false;
-        if (dStrstr(pExtString, (const char*)"GL_EXT_compiled_vertex_array") != NULL)
-            gGLState.suppLockedArrays = true;
+        gGLState.suppLockedArrays = hasGLExtension(pExtString, "GL_EXT_compiled_vertex_array");
         
         // ARB_multitexture ========================================
-        if (dStrstr(pExtString, (const char*)"GL_ARB_multitexture") != NULL)
-            gGLState.suppARBMultitexture = true;
+        gGLState.suppARBMultitexture = isGL3OrHigher || hasGLExtension(pExtString, "GL_ARB_multitexture");
         
         // EXT_blend_color
-        if (dStrstr(pExtString, (const char*)"GL_EXT_blend_color") != NULL)
-            gGLState.suppEXTblendcolor = true;
+        gGLState.suppEXTblendcolor = isGL3OrHigher || hasGLExtension(pExtString, "GL_EXT_blend_color");
         
         // EXT_blend_minmax
-        if (dStrstr(pExtString, (const char*)"GL_EXT_blend_minmax") != NULL)
-            gGLState.suppEXTblendminmax = true;
+        gGLState.suppEXTblendminmax = isGL3OrHigher || hasGLExtension(pExtString, "GL_EXT_blend_minmax");
         
         // NV_vertex_array_range ========================================
         // does not appear to be supported by apple, at all. (as of 10.4.3)
         // GL_APPLE_vertex_array_range is similar, and may be nearly identical.
-        if (dStrstr(pExtString, (const char*)"GL_NV_vertex_array_range") != NULL)
-            gGLState.suppVertexArrayRange = true;
+        gGLState.suppVertexArrayRange = hasGLExtension(pExtString, "GL_NV_vertex_array_range");
         
         
         // EXT_fog_coord ========================================
-        if (dStrstr(pExtString, (const char*)"GL_EXT_fog_coord") != NULL)
-            gGLState.suppFogCoord = true;
+        gGLState.suppFogCoord = hasGLExtension(pExtString, "GL_EXT_fog_coord");
         
         // ARB_texture_compression ========================================
-        if (dStrstr(pExtString, (const char*)"GL_ARB_texture_compression") != NULL)
-            gGLState.suppTextureCompression = true;
+        gGLState.suppTextureCompression = isGL3OrHigher || hasGLExtension(pExtString, "GL_ARB_texture_compression");
         
         // 3DFX_texture_compression_FXT1 ========================================
-        if (dStrstr(pExtString, (const char*)"GL_3DFX_texture_compression_FXT1") != NULL)
-            gGLState.suppFXT1 = true;
+        gGLState.suppFXT1 = hasGLExtension(pExtString, "GL_3DFX_texture_compression_FXT1");
         
         // EXT_texture_compression_S3TC ========================================
-        if (dStrstr(pExtString, (const char*)"GL_EXT_texture_compression_s3tc") != NULL)
-            gGLState.suppS3TC = true;
+        gGLState.suppS3TC = hasGLExtension(pExtString, "GL_EXT_texture_compression_s3tc");
         
         // EXT_vertex_buffer ========================================
         // This extension is deprecated, and not supported by Apple. (10.4.3)
         // Instead, the ARB Vertex Buffer extension is supported.
         // The new extension has a different API, so TGE should be updated to use it.
-        if (dStrstr(pExtString, (const char*)"GL_EXT_vertex_buffer") != NULL)
-            gGLState.suppVertexBuffer = true;
+        gGLState.suppVertexBuffer = hasGLExtension(pExtString, "GL_EXT_vertex_buffer");
         
         // Anisotropic filtering ========================================
-        gGLState.suppTexAnisotropic    = (dStrstr(pExtString, (const char*)"GL_EXT_texture_filter_anisotropic") != NULL);
+        gGLState.suppTexAnisotropic = hasGLExtension(pExtString, "GL_EXT_texture_filter_anisotropic")
+            || hasGLExtension(pExtString, "GL_ARB_texture_filter_anisotropic");
         if (gGLState.suppTexAnisotropic)
             glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gGLState.maxAnisotropy);
         
@@ -236,23 +292,27 @@ void getGLCapabilities()
         // Some of these have multiple representations, via EXT and|or ARB and|or NV and|or SGIS ... etc.
         // Check all relative versions.
         
-        gGLState.suppPackedPixels = (dStrstr(pExtString, (const char*)"GL_EXT_packed_pixels") != NULL);
-        gGLState.suppPackedPixels |= (dStrstr(pExtString, (const char*)"GL_APPLE_packed_pixel") != NULL);
+        gGLState.suppPackedPixels = isGL3OrHigher
+            || hasGLExtension(pExtString, "GL_EXT_packed_pixels")
+            || hasGLExtension(pExtString, "GL_APPLE_packed_pixel");
         
-        gGLState.suppTextureEnvCombine = (dStrstr(pExtString, (const char*)"GL_EXT_texture_env_combine") != NULL);
-        gGLState.suppTextureEnvCombine |= (dStrstr(pExtString, (const char*)"GL_ARB_texture_env_combine") != NULL);
+        gGLState.suppTextureEnvCombine = hasGLExtension(pExtString, "GL_EXT_texture_env_combine")
+            || hasGLExtension(pExtString, "GL_ARB_texture_env_combine");
         
-        gGLState.suppEdgeClamp = (dStrstr(pExtString, (const char*)"GL_EXT_texture_edge_clamp") != NULL);
-        gGLState.suppEdgeClamp |= (dStrstr(pExtString, (const char*)"GL_SGIS_texture_edge_clamp") != NULL);
-        gGLState.suppEdgeClamp |= (dStrstr(pExtString, (const char*)"GL_ARB_texture_border_clamp") != NULL);
+        gGLState.suppEdgeClamp = isGL3OrHigher
+            || hasGLExtension(pExtString, "GL_EXT_texture_edge_clamp")
+            || hasGLExtension(pExtString, "GL_SGIS_texture_edge_clamp")
+            || hasGLExtension(pExtString, "GL_ARB_texture_border_clamp");
         
-        gGLState.suppTexEnvAdd = (dStrstr(pExtString, (const char*)"GL_ARB_texture_env_add") != NULL);
-        gGLState.suppTexEnvAdd |= (dStrstr(pExtString, (const char*)"GL_EXT_texture_env_add") != NULL);
+        gGLState.suppTexEnvAdd = hasGLExtension(pExtString, "GL_ARB_texture_env_add")
+            || hasGLExtension(pExtString, "GL_EXT_texture_env_add");
         
     }
    
     // Texture combine units  ========================================
-    if (gGLState.suppARBMultitexture)
+    if (isGL3OrHigher)
+        glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &gGLState.maxTextureUnits);
+    else if (gGLState.suppARBMultitexture)
         glGetIntegerv(GL_MAX_TEXTURE_UNITS_ARB, &gGLState.maxTextureUnits);
     else
         gGLState.maxTextureUnits = 1;
