@@ -1,0 +1,169 @@
+# Dev Files #
+###################
+*.xcworkspace
+*.xcuserdatad
+.LSOverride
+/tmp/*
+/preferences.cs
+/engine/**/preferences.cs
+/PlanetXPrefs.cs
+/console.log
+*.dso
+*.edso
+*.user
+*.sdf
+*.suo
+*.dir
+*.opensdf
+*.idea
+*.dSYM
+*.res
+*.cache
+*.exports
+*.opt
+*.tmp
+Torque2D.app
+Torque2D_DEBUG.app
+Torque2D.exe
+Torque2D_DEBUG.exe
+# OpenAL Soft runtime staged next to the exe by CMake POST_BUILD (build artifact).
+# Root-anchored so the per-arch source DLLs under engine/lib/openal/ stay tracked.
+/OpenAL32.dll
+Torque2DGame.app
+Torque2DGame_Debug.app
+Torque2D
+Torque2D_DEBUG
+linkmap.txt
+**/.vs/**
+.vscode/
+.idea/
+*.sln
+*.slnx
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.vcxproj.FileListAbsolute.txt
+*.userosscache
+*.sln.docstates
+*.slnx.docstates
+# Root-anchored so tracked engine/source/debug/, engine/lib/openal/win32/, and engine/lib/LeapSDK/lib/x64/ stay unignored.
+/[Dd]ebug/
+/[Rr]elease/
+/[Rr]elWithDebInfo/
+/[Mm]inSizeRel/
+/[Ss]hipping/
+/x64/
+/Win32/
+
+# Compiled source #
+###################
+*.com
+*.class
+*.o
+*.a
+*.so
+*.obj
+*.lib
+*.dll
+*.exe
+*.recipe
+*.lib.recipe
+*.exe.recipe
+*.idb
+*.pdb
+*.ilk
+*.exp
+*.iobj
+*.ipdb
+*.ipch
+*.lastbuildstate
+*.unsuccessfulbuild
+*.manifest
+*.tlog
+
+# Logs and databases #
+######################
+*.log
+*.sql
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Icon?
+*.db
+
+# Android project files #
+#########################
+.metadata/
+engine/compilers/android/.settings/org.eclipse.cdt.core.prefs
+engine/compilers/android/bin/
+engine/compilers/android/gen/
+engine/compilers/android/obj/
+engine/compilers/android-studio/.gradle/
+engine/compilers/android-studio/build/
+engine/compilers/android-studio/app/build/
+engine/compilers/android-studio/local.properties
+engine/compilers/android-studio/app/src/main/obj/
+engine/compilers/android-studio/app/src/main/libs/
+engine/compilers/android-studio/app/src/main/game/
+engine/compilers/android-studio/app/.externalNativeBuild/
+engine/compilers/android-studio/app/.cxx/
+
+# CMake out-of-source & in-source build directories #
+####################################################
+/[Bb]uild/
+/[Bb]uild-*/
+/out/
+/cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+/Makefile
+compile_commands.json
+
+# Integration test leavings (see tests/README.md) #
+##################################################
+# The one-line boot stub tests/run.ps1 writes at the root, because the engine
+# takes its working directory from the boot script's own folder.
+/_boot.cs
+# Screenshots the tests/shots harnesses write, and the throwaway projects the
+# tests build to have something to edit. A test that adds a project folder wants
+# a line here too; ProjectManager.setProjectFolder names them.
+/shots/
+# One console log per test, written by tests/run.ps1 and run-unit.ps1 so a run
+# neither collides with a hand-started editor nor throws away the log of the
+# suite that failed.
+/tests/logs/
+/assetLibrarySmokeProject/
+/assetPickerSmokeProject/
+/borderPaneSmokeProject/
+/borderSmokeProject/
+/colorPopupShotProject/
+/colorPopupSmokeProject/
+/cursorPaneSmokeProject/
+/cursorSlotsSmokeProject/
+/fontShotProject/
+/fontSmokeProject/
+/inspectorTextSmokeProject/
+/inspectorVariantsSmokeProject/
+/profileFormShotProject/
+/profileFormSmokeProject/
+/smokeThemeProject/
+/unsavedSmokeProject/
+# GuiDefaultProfile.fontDirectory is the unexpanded string "^EditorCore/gui/fonts"
+# (guiProfiles.cs), and anything that bakes a font-cache miss recorded against it
+# writes to a folder of that literal name. Nothing in the suite does, but it has
+# happened once, and a stray caret folder is never content.
+/^EditorCore/
+
+# Vendored prebuilt libraries & tools (override the global binary ignores) #
+###########################################################################
+!engine/lib/**/*.lib
+!engine/lib/**/*.dll
+!engine/lib/**/*.a
+!engine/lib/**/*.so
+!engine/bin/**/*.exe
