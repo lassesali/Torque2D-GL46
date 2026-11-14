@@ -27,13 +27,13 @@
 #ifdef __OBJC__
 	#import <QuartzCore/QuartzCore.h>
 //#import <OpenGLES/EAGL.h>
-	#import <OpenGLES/ES1/gl.h>
-	#import <OpenGLES/ES1/glext.h>
+	#import <OpenGLES/ES3/gl.h>
+	#import <OpenGLES/ES3/glext.h>
 #else
 #include <QuartzCore/QuartzCore.h>
 //#include <OpenGLES/EAGL.h>
-#include <OpenGLES/ES1/gl.h>
-#include <OpenGLES/ES1/glext.h>
+#include <OpenGLES/ES3/gl.h>
+#include <OpenGLES/ES3/glext.h>
 #endif
 
 //------------------------------------------------------------------------------
