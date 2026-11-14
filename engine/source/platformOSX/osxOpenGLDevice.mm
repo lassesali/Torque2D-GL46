@@ -201,18 +201,19 @@ void osxOpenGLDevice::shutdown()
 
 //-----------------------------------------------------------------------------
 
-NSOpenGLPixelFormat* osxOpenGLDevice::generateValidPixelFormat(bool fullscreen, U32 bpp, U32 samples)
+static NSOpenGLPixelFormat* buildPixelFormatWithProfile(U32 bpp, U32 samples, NSOpenGLPixelFormatAttribute profile, bool useProfile)
 {
-    AssertWarn(samples <= 6, "An unusual multisample depth was requested in findValidPixelFormat(). clamping to 0...6");
-
-    samples = samples > 6 ? 6 : samples;
-
     int i = 0;
     NSOpenGLPixelFormatAttribute attr[64];
 
     attr[i++] = NSOpenGLPFADoubleBuffer;
     attr[i++] = NSOpenGLPFANoRecovery;
     attr[i++] = NSOpenGLPFAAccelerated;
+    if (useProfile)
+    {
+        attr[i++] = NSOpenGLPFAOpenGLProfile;
+        attr[i++] = profile;
+    }
 
     if(bpp != 0)
     {
@@ -246,9 +247,26 @@ NSOpenGLPixelFormat* osxOpenGLDevice::generateValidPixelFormat(bool fullscreen, 
 
     attr[i++] = 0;
 
-    NSOpenGLPixelFormat* format = [[[NSOpenGLPixelFormat alloc] initWithAttributes:attr] autorelease];
+    return [[[NSOpenGLPixelFormat alloc] initWithAttributes:attr] autorelease];
+}
 
-    return format;
+NSOpenGLPixelFormat* osxOpenGLDevice::generateValidPixelFormat(bool fullscreen, U32 bpp, U32 samples)
+{
+    AssertWarn(samples <= 6, "An unusual multisample depth was requested in findValidPixelFormat(). clamping to 0...6");
+
+    samples = samples > 6 ? 6 : samples;
+
+    const NSOpenGLPixelFormatAttribute profiles[] = {
+        (NSOpenGLPixelFormatAttribute)NSOpenGLProfileVersion4_1Core,
+        (NSOpenGLPixelFormatAttribute)NSOpenGLProfileVersion3_2Core
+    };
+    for (U32 i = 0; i < sizeof(profiles) / sizeof(profiles[0]); ++i)
+    {
+        if (NSOpenGLPixelFormat* format = buildPixelFormatWithProfile(bpp, samples, profiles[i], true))
+            return format;
+    }
+
+    return buildPixelFormatWithProfile(bpp, samples, 0, false);
 }
 
 //-----------------------------------------------------------------------------
@@ -395,7 +413,9 @@ const char* osxOpenGLDevice::getDriverInfo()
     const char* vendorString   = (const char*) glGetString( GL_VENDOR );
     const char* rendererString = (const char*) glGetString( GL_RENDERER );
     const char* versionString  = (const char*) glGetString( GL_VERSION );
-    const char* extensionsString = (const char*) glGetString( GL_EXTENSIONS );
+    const char* extensionsString = (gGLState.glMajorVersion >= 3)
+        ? "CORE_PROFILE"
+        : (const char*) glGetString( GL_EXTENSIONS );
 
     U32 bufferLen = ( vendorString ? dStrlen( vendorString ) : 0 )
     + ( rendererString ? dStrlen( rendererString ) : 0 )

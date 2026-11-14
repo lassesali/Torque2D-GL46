@@ -90,7 +90,7 @@ GLuint createVertexArray()
       return vao;
    }
    glGenVertexArrays(1, &vao);
-#elif defined(TORQUE_OS_ANDROID) || defined(TORQUE_OS_IOS)
+#elif defined(TORQUE_OS_ANDROID) || defined(TORQUE_OS_IOS) || defined(TORQUE_OS_OSX)
    glGenVertexArrays(1, &vao);
 #endif
    return vao;
@@ -98,7 +98,7 @@ GLuint createVertexArray()
 
 void deleteVertexArray(GLuint vao)
 {
-#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_LINUX) || defined(TORQUE_OS_ANDROID) || defined(TORQUE_OS_IOS)
+#if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_LINUX) || defined(TORQUE_OS_ANDROID) || defined(TORQUE_OS_IOS) || defined(TORQUE_OS_OSX)
    if (vao != 0)
       glDeleteVertexArrays(1, &vao);
 #endif
