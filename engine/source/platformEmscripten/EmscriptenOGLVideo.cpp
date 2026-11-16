@@ -273,10 +273,12 @@ static bool PageSizesCanvas()
 // Make the window and its GL context: once, for the first setScreenMode.
 static bool CreateGLWindow( U32 width, U32 height )
 {
-   // The GL attributes are read when the context is made. No context version
-   // or profile is asked for: SDL 2's Emscripten driver then makes a WebGL 1
-   // context (GLES 2.0), the only kind LEGACY_GL_EMULATION can draw the
-   // fixed-function renderer through.
+   // Request a WebGL 2 (OpenGL ES 3.0) context for the programmable shader
+   // pipeline (ShaderManager / GLDSA), matching -sMIN_WEBGL_VERSION=2 /
+   // -sMAX_WEBGL_VERSION=2 in CMakeLists.txt.
+   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
    SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 0);
 
@@ -505,12 +507,29 @@ const char* OpenGLDevice::getDriverInfo()
    const char* vendorString   = (const char*) glGetString( GL_VENDOR );
    const char* rendererString = (const char*) glGetString( GL_RENDERER );
    const char* versionString  = (const char*) glGetString( GL_VERSION );
-   const char* extensionsString = (const char*) glGetString( GL_EXTENSIONS );
+
+   const char* extensionsString = NULL;
+   U32 coreExtLen = 0;
+   GLint numExt = 0;
+   if (gGLState.glMajorVersion < 3)
+   {
+      extensionsString = (const char*) glGetString( GL_EXTENSIONS );
+   }
+   else
+   {
+      glGetIntegerv(GL_NUM_EXTENSIONS, &numExt);
+      for (GLint i = 0; i < numExt; ++i)
+      {
+         const char* ext = (const char*) glGetStringi(GL_EXTENSIONS, (GLuint)i);
+         if (ext)
+            coreExtLen += dStrlen(ext) + 1;
+      }
+   }
 
    U32 bufferLen = ( vendorString ? dStrlen( vendorString ) : 0 )
                  + ( rendererString ? dStrlen( rendererString ) : 0 )
                  + ( versionString  ? dStrlen( versionString ) : 0 )
-                 + ( extensionsString ? dStrlen( extensionsString ) : 0 )
+                 + ( extensionsString ? dStrlen( extensionsString ) : coreExtLen )
                  + 4;
 
    char* returnString = Con::getReturnBuffer( bufferLen );
@@ -519,6 +538,25 @@ const char* OpenGLDevice::getDriverInfo()
       ( rendererString ? rendererString : "" ),
       ( versionString ? versionString : "" ),
       ( extensionsString ? extensionsString : "" ) );
+
+   if (gGLState.glMajorVersion >= 3 && numExt > 0)
+   {
+      U32 offset = dStrlen(returnString);
+      for (GLint i = 0; i < numExt; ++i)
+      {
+         const char* ext = (const char*) glGetStringi(GL_EXTENSIONS, (GLuint)i);
+         if (!ext)
+            continue;
+         U32 len = dStrlen(ext);
+         if (offset + len + 2 > bufferLen)
+            break;
+         if (i > 0)
+            returnString[offset++] = ' ';
+         dMemcpy(returnString + offset, ext, len);
+         offset += len;
+      }
+      returnString[offset] = '\0';
+   }
 
    return( returnString );
 }
