@@ -20,12 +20,14 @@ import android.util.Log;
 public class FontManager
 {
 	static private HashMap< String, String > fonts = null;
+	static private String defaultFontPath = null;
     // This function enumerates all fonts on Android system and returns the HashMap with the font
     // absolute file name as key, and the font literal name (embedded into the font) as value.
     static public void enumerateFonts(Context context)
     {
         String[] fontdirs = { "/system/fonts", "/system/font", "/data/fonts" };
         fonts = new HashMap< String, String >();
+        defaultFontPath = null;
         TTFAnalyzer analyzer = new TTFAnalyzer();
  
         for ( String fontdir : fontdirs )
@@ -59,10 +61,17 @@ public class FontManager
 				if (customFont.endsWith(".ttf"))
 				{
 					String customFontPath = copyCustomFontToCache(customFont, assetMgr, context);
-					String fontname = analyzer.getTtfFontName( customFontPath );
-					 
-	                if ( fontname != null )
-	                    fonts.put( customFontPath, fontname );
+					if (customFontPath != null && !customFontPath.isEmpty())
+					{
+						if (defaultFontPath == null || customFont.equalsIgnoreCase("Roboto-Regular.ttf"))
+							defaultFontPath = customFontPath;
+
+						String fontname = analyzer.getTtfFontName( customFontPath );
+						if ( fontname != null )
+							fonts.put( customFontPath, fontname );
+						else
+							fonts.put( customFontPath, customFont );
+					}
 				}
 	        }
 			
@@ -130,22 +139,69 @@ public class FontManager
         }
     }
     
+    /**
+     * Find a font path matching query and optional bold/italic style flags.
+     */
+    static private String findMatchingFont(String query, boolean wantsBold, boolean wantsItalic)
+    {
+        if (fonts == null || query == null || query.isEmpty())
+            return null;
+
+        String lowerQuery = query.toLowerCase();
+        for (String key : fonts.keySet())
+        {
+            String data = fonts.get(key);
+            if (data == null)
+                continue;
+
+            String lowerData = data.toLowerCase();
+            boolean hasBold = lowerData.contains("bold");
+            boolean hasItalic = lowerData.contains("italic");
+            if (!wantsBold && !wantsItalic)
+            {
+                if (lowerData.contains(lowerQuery) && !hasBold && !hasItalic)
+                    return key;
+            }
+            else if (lowerData.contains(lowerQuery) && (!wantsBold || hasBold) && (!wantsItalic || hasItalic))
+            {
+                return key;
+            }
+        }
+        return null;
+    }
+
     static public String getFont(String fontName)
     {
-    	for (String key : fonts.keySet())
-    	{
-    		String data = fonts.get(key);
-    		if (!fontName.contains("Italic") && !fontName.contains("Bold"))
-    		{
-    			if (data.contains(fontName) && !data.contains("Italic") && !data.contains("Bold"))
-    				return key;
-    		} else {
-    			if (data.contains(fontName))
-    				return key;
-    		}
-    	}
-    	
-    	return null;
+        if (fonts == null || fonts.isEmpty())
+            return defaultFontPath;
+
+        String target = (fontName != null) ? fontName : "";
+        boolean wantsBold = target.toLowerCase().contains("bold");
+        boolean wantsItalic = target.toLowerCase().contains("italic");
+
+        String match = findMatchingFont(target, wantsBold, wantsItalic);
+        if (match != null)
+            return match;
+
+        // Fall back across Android sans families preserving requested weight/style, then regular.
+        String[] fallbackFamilies = { "Roboto", "Noto Sans", "Droid Sans" };
+        for (String family : fallbackFamilies)
+        {
+            match = findMatchingFont(family, wantsBold, wantsItalic);
+            if (match != null)
+                return match;
+            if (wantsBold || wantsItalic)
+            {
+                match = findMatchingFont(family, false, false);
+                if (match != null)
+                    return match;
+            }
+        }
+
+        if (defaultFontPath != null && !defaultFontPath.isEmpty())
+            return defaultFontPath;
+
+        return fonts.keySet().iterator().next();
     }
 }
  
