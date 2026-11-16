@@ -583,20 +583,19 @@ File::Status File::setPosition(S32 position, bool absolutePos)
        return currentStatus;
    
    U32 finalPos = 0;
-   switch (absolutePos)
+   if (absolutePos)
    {
-   case true:                                                    // absolute position
        AssertFatal(0 <= position, "File::setPosition: negative absolute position");
-       
+
        // position beyond EOS is OK
        finalPos = lseek(*((int *)handle), position, SEEK_SET);
-       break;
-   case false:                                                    // relative position
+   }
+   else
+   {
        AssertFatal((getPosition() >= (U32)abs(position) && 0 > position) || 0 <= position, "File::setPosition: negative relative position");
-       
+
        // position beyond EOS is OK
        finalPos = lseek(*((int *)handle), position, SEEK_CUR);
-  break;
    }
 
    if (0xffffffff == finalPos)
@@ -1018,13 +1017,13 @@ bool Platform::hasSubDirectory(const char *pPath)
  if (dip == NULL)
    return false;
 
- while (d = readdir(dip))
+ while ((d = readdir(dip)) != NULL)
    {
   bool isDir = false;
   if (d->d_type == DT_UNKNOWN) 
   {
       char child [1024];
-      if ((pPath[dStrlen(pPath) - 1] == '/'))
+      if (pPath[dStrlen(pPath) - 1] == '/')
           dSprintf(child, 1024, "%s%s", pPath, d->d_name);
       else
           dSprintf(child, 1024, "%s/%s", pPath, d->d_name);
@@ -1108,14 +1107,14 @@ static bool recurseDumpDirectories(const char *basePath, const char *subPath, Ve
  // Iterate through and grab valid directories
  //////////////////////////////////////////////////////////////////////////
 
-  while (d = readdir(dip))
+  while ((d = readdir(dip)) != NULL)
   {
       bool	isDir;
       isDir = false;
       if (d->d_type == DT_UNKNOWN) 
       {
           char child [1024];
-          if ((Path[dStrlen(Path) - 1] == '/'))
+          if (Path[dStrlen(Path) - 1] == '/')
               dSprintf(child, 1024, "%s%s", Path, d->d_name);
           else
               dSprintf(child, 1024, "%s/%s", Path, d->d_name);
