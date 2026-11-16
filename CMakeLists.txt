@@ -159,6 +159,8 @@ target_compile_features(Torque2D PRIVATE cxx_std_17)
 target_include_directories(Torque2D PRIVATE
     ${TORQUE_SRC}
     ${TORQUE_LIB}
+)
+target_include_directories(Torque2D SYSTEM PRIVATE
     ${TORQUE_SRC}/persistence/rapidjson
     ${TORQUE_SRC}/persistence/rapidjson/include
 )
@@ -227,6 +229,18 @@ else()
     # tolerates it; Clang (Android NDK, and macOS/iOS) makes -Wregister an error.
     target_compile_options(Torque2D PRIVATE -Wno-register)
 endif()
+
+# Suppress compiler warnings in vendored Box2D sources while keeping them enabled for Torque2D code.
+set(_torque_box2d_sources ${TORQUE_ENGINE_SOURCES})
+list(FILTER _torque_box2d_sources INCLUDE REGEX "/Box2D/")
+if(_torque_box2d_sources)
+    if(MSVC)
+        set_source_files_properties(${_torque_box2d_sources} PROPERTIES COMPILE_OPTIONS "/W0")
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        set_source_files_properties(${_torque_box2d_sources} PROPERTIES COMPILE_OPTIONS "-w")
+    endif()
+endif()
+unset(_torque_box2d_sources)
 
 # Link: third-party libs built from source (transitively bring their includes).
 target_link_libraries(Torque2D PRIVATE libogg libvorbis lpng ljpeg)
