@@ -1,28 +1,36 @@
-Torque 2D - OpenGL 4.6 Core / OpenGL ES 3.2 Migration Report
+Torque 2D - OpenGL 4.6 Core / OpenGL ES 3.x Migration Report
 Generated: 2026-11-14
 Repository: C:\Users\lkarh\Downloads\Torque2D-master
-Branch: local-gl46 (merged with upstream/development, 31 commits)
+Branch: fix/macOS (branched from fix/iOS @ e4ec7d9, onto main @ 966636d, 31 upstream/development commits)
 
 ================================================================================
 1. ARCHITECTURE & TARGET BASELINES
 ================================================================================
 
-- Desktop Target:
-  OpenGL 4.6 Core Profile (#version 460 core).
-- Android / Mobile Target:
-  OpenGL ES 3.2 (#version 320 es) with precision qualifiers
-  (precision highp float;, precision highp int;, precision highp sampler2D;)
-  injected by ShaderManager::buildPreprocessedSource().
+- Desktop Targets:
+  * Windows / Linux: OpenGL 4.6 Core Profile (#version 460 core).
+  * macOS: Apple OpenGL 4.1 Core Profile (#version 410 core, with 3.2 Core
+    fallback) selected via <OpenGL/gl3.h> / <OpenGL/gl3ext.h>,
+    NSOpenGLProfileVersion4_1Core / kCGLOGLPVersion_GL4_Core.
+- Android / Mobile Targets:
+  * Android: OpenGL ES 3.2 (#version 320 es).
+  * iOS: OpenGL ES 3.0 (#version 300 es, kEAGLRenderingAPIOpenGLES3) via
+    <OpenGLES/ES3/gl.h> and <OpenGLES/ES3/glext.h>.
+  * ShaderManager::buildPreprocessedSource() injects highp precision qualifiers
+    (precision highp float;, precision highp int;, precision highp sampler2D;)
+    and formats #version %u%u0 core/es from detected GL version or platform
+    defaults.
 - Web / Emscripten Target:
   CMakeLists.txt pairs upstream/development SDL 2 (-sUSE_SDL=2) with WebGL 2
   flags (-sMIN_WEBGL_VERSION=2, -sMAX_WEBGL_VERSION=2, replacing
-  LEGACY_GL_EMULATION). ShaderManager::compileShader selects ES shader
-  profiles for TORQUE_OS_EMSCRIPTEN (WebGL 2 GL attributes in
-  EmscriptenOGLVideo.cpp remain a follow-up item; see Section 3.A.4).
+  LEGACY_GL_EMULATION). ShaderManager::compileShader selects #version 300 es
+  (defaultGLESMinor = 0U) for TORQUE_OS_EMSCRIPTEN (explicit WebGL 2 SDL GL
+  attributes in EmscriptenOGLVideo.cpp remain a follow-up item; see Section 3.B.4).
 - Direct State Access Abstraction (GLDSA):
   4.5+ DSA calls are wrapped behind GLDSA::* in engine/source/graphics/glDSA.h
   and glDSA.cc so core engine code compiles and runs cleanly against OpenGL 4.6
-  Core, OpenGL ES 3.2, and future ANGLE/Vulkan or macOS fallback paths.
+  Core, macOS 4.1 Core (VAO helpers enabled; glTexStorage2D omitted because
+  Apple OpenGL caps at 4.1), iOS ES 3.0, Android ES 3.2, and WebGL 2 fallback paths.
 - VAO-Backed Programmable Pipeline & CPU Matrix Stacks:
   Fixed-function immediate mode, client arrays, matrix stacks, GL_ALPHA_TEST,
   and glClipPlane calls are replaced by VAO/VBO/IBO streaming draws in
@@ -128,11 +136,89 @@ D. Upstream Development Merge Integration (31 Commits into local-gl46)
     (<SDL.h> + SDL_GL_SetSwapInterval support); confirmed zero legacy
     fixed-function OpenGL calls were introduced.
 
+E. Apple Platforms: iOS OpenGL ES 3.0 (e4ec7d9) & macOS Core Profile (ce01c8c)
+- iOS OpenGL ES 3.0 (commit e4ec7d9 on fix/iOS):
+  * engine/source/platform/GLModernTypes.h: Added #ifndef guards for GL_RED
+    (0x1903), GL_GREEN (0x1904), GL_BLUE (0x1905), and GL_ALPHA (0x1906) so
+    TextureManager swizzle setup compiles cleanly under Apple ES3 headers.
+  * engine/source/platformiOS/platformGL.h, iOSGL2ES.h & iOSGL2ES.mm: Switched
+    from <OpenGLES/ES1/gl.h> / glext.h to <OpenGLES/ES3/gl.h> and
+    <OpenGLES/ES3/glext.h>, guarded legacy texture format enums in iOSGL2ES.h,
+    and updated compatibility wrappers to delegate to dgl and ShaderManager.
+  * engine/source/platformiOS/T2DView.mm & T2DViewController.mm: Switched
+    EAGLContext from kEAGLRenderingAPIOpenGLES1 to kEAGLRenderingAPIOpenGLES3
+    and replaced deprecated *_OES framebuffer/renderbuffer APIs with ES 3.0
+    core equivalents (glGenFramebuffers, glBindFramebuffer, GL_FRAMEBUFFER,
+    GL_RENDERBUFFER, etc.).
+  * engine/source/platformiOS/iOSGL.mm: Queried GL_MAJOR_VERSION and
+    GL_MINOR_VERSION, configured suppDSA = false, suppTexStorage = true, and
+    isCoreProfile = false, and enumerated GL 3+ extensions via
+    glGetIntegerv(GL_NUM_EXTENSIONS) + glGetStringi(GL_EXTENSIONS, i).
+  * engine/source/graphics/ShaderManager.cc & glDSA.cc: Added defaultGLESMinor =
+    0U (#version 300 es) for TORQUE_OS_IOS and TORQUE_OS_EMSCRIPTEN; enabled
+    TORQUE_OS_IOS in GLDSA::createVertexArray(), deleteVertexArray(),
+    textureStorage2D(), and bindTextureUnit().
+  * engine/source/testing/tests/openglMigrationTests.cc: Extended
+    CoreSizedFormatsAndSwizzleEnumsDefined to verify GL_RED/GREEN/BLUE/ALPHA
+    and GL_TEXTURE_SWIZZLE_R/G/B/A values.
+- macOS OpenGL Core Profile (commit ce01c8c on fix/macOS):
+  * engine/source/platformOSX/platformGL.h: Replaced legacy Apple GL 2.1 headers
+    (<OpenGL/gl.h>, <OpenGL/glu.h>, <OpenGL/glext.h>) with <OpenGL/gl3.h> and
+    <OpenGL/gl3ext.h> (declaring standard glBindVertexArray used in
+    ShaderManager.cc), added GL_SILENCE_DEPRECATION, and added #ifndef guards for
+    GL_TEXTURE_MAX_ANISOTROPY_EXT, GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT,
+    GL_TEXTURE_COMPRESSION_HINT_ARB, and GL_MAX_TEXTURE_UNITS_ARB.
+  * engine/source/graphics/glDSA.cc: Enabled TORQUE_OS_OSX in
+    GLDSA::createVertexArray() and deleteVertexArray() (glGenVertexArrays /
+    glDeleteVertexArrays) while leaving textureStorage2D() off macOS (Apple
+    OpenGL stops at 4.1 Core; glTexStorage2D is GL 4.2).
+  * engine/source/platformOSX/osxOutlineGL.cc: Updated TORQUE_DEBUG wireframe
+    mode hooks from removed glBegin(GL_LINES) / glArrayElement() / glEnd() calls
+    to Core Profile glPolygonMode(GL_FRONT_AND_BACK, GL_LINE) / GL_FILL around
+    glDrawElements and glDrawArrays.
+  * engine/source/platformOSX/osxGL.mm: Updated getContextForCapsCheck()
+    (createCGLContextWithAttributes) to request kCGLOGLPVersion_GL4_Core then
+    kCGLOGLPVersion_3_2_Core with fallback; updated getGLCapabilities() to query
+    GL_MAJOR_VERSION / GL_MINOR_VERSION / GL_CONTEXT_PROFILE_MASK (isCoreProfile),
+    set suppDSA = false and suppTexStorage = false, enumerate GL 3+ extensions
+    via glGetStringi(GL_EXTENSIONS, i), and query GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS.
+  * engine/source/platformOSX/osxOpenGLDevice.mm: Updated
+    generateValidPixelFormat() (buildPixelFormatWithProfile) to request
+    NSOpenGLProfileVersion4_1Core then NSOpenGLProfileVersion3_2Core with fallback,
+    and updated getDriverInfo() to return "CORE_PROFILE" on GL 3.0+ instead of
+    calling glGetString(GL_EXTENSIONS).
+
 ================================================================================
 3. VERIFICATION RESULTS
 ================================================================================
 
-A. Post-Merge Verification (local-gl46 + upstream/development)
+A. Latest Verification (fix/macOS @ ce01c8c, 2026-11-14)
+
+1. Static OpenGL Audit on macOS & Core Renderer Sources
+   - git grep across engine/source/platformOSX/, engine/source/graphics/,
+     engine/source/2d/, engine/source/gui/, and tools/CMake/ confirmed zero
+     remaining <OpenGL/gl.h>/<OpenGL/glu.h>/<OpenGL/glext.h> includes, glu*
+     calls, or active glBegin/glEnd/glArrayElement calls in macOS sources.
+
+2. Windows x64 Debug Build (Visual Studio 18 2026 / MSBuild, temp outdir)
+   - Rebuilt Torque2D.vcxproj after macOS/glDSA changes: glDSA.cc compiled and
+     linked Torque2D_DEBUG.exe with 0 errors.
+
+3. C++ Unit Tests (GoogleTest via Torque2D_DEBUG.exe main.runAllUnitTests.cs)
+   - Filtered OpenGLMigration* run: All 7 tests passed (tests=7, failures=0,
+     disabled=0, skipped=0, errors=0).
+   - Full sandboxed run: Executed 406 tests total with 391 passed and 15 failures
+     (all 15 failures were workspace scratch-file writes / empty HOME directory
+     tests under sandbox isolation: DirectoryScanCaseTests, GuiProfileThemeTests,
+     GuiTextRotationTests, GuiTooltipProfileFieldTests, PlatformFileIOTests, and
+     ResourceManagerDeleteTests; run pwsh tests\run-unit.ps1 on the local host
+     outside sandbox for unrestricted filesystem checks).
+
+4. Cross-Platform CI Note
+   - iOS (e4ec7d9) and macOS (ce01c8c) Xcode builds cannot execute locally on
+     this Windows host and rely on GitHub Actions macOS/iOS CI verification.
+
+B. Post-Merge Verification (local-gl46 + upstream/development @ 966636d)
 
 1. CMake Out-of-Source Configure (build-gl46-test)
    - Generator / Toolchain: Visual Studio 18 2026 (-A x64), CMake 4.3.1-msvc1,
@@ -165,7 +251,7 @@ A. Post-Merge Verification (local-gl46 + upstream/development)
      omits SDL GL version attributes for ES 3.0 / WebGL 2 and keeps comments
      referencing LEGACY_GL_EMULATION. Update CreateGLWindow before shipping Web.
 
-B. Pre-Merge Baseline Verification (Recorded on local-gl46 commit 910a9aae)
+C. Pre-Merge Baseline Verification (Recorded on local-gl46 commit 910a9aae)
    Historical results captured prior to merging upstream/development:
 
 1. Static Workspace Audit (Select-String on engine/source, excluding platform*
