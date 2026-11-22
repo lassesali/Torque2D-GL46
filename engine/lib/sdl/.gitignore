@@ -38,6 +38,7 @@ install_manifest.txt
 *Targets.cmake
 *Config.cmake
 *ConfigVersion.cmake
+!cmake/*.cmake
 CTestTestfile.cmake
 Testing
 compile_commands.json
