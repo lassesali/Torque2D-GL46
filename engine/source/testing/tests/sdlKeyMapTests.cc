@@ -125,7 +125,7 @@ TEST( SdlKeyMapTests, KeysTorqueHasNoCodeForMapToNull )
 
     // Scancodes past 255 -- the media and browser keys -- which Torque3D's
     // table, 256 entries long, reads past the end of.
-    ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_AUDIONEXT ) );
+    ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_MEDIA_NEXT_TRACK ) );
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_AC_BACK ) );
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_COUNT ) );
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( 0xFFFFFFFF ) );

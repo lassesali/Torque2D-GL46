@@ -525,7 +525,7 @@ bool OpenGLDevice::isWindowFullScreen()
    if ( window == NULL )
       return false;
 
-#if defined(SDL_VIDEO_DRIVER_X11)
+#if defined(LINUX)
    const char* videoDriver = SDL_GetCurrentVideoDriver();
    if ( videoDriver && dStrcmp( videoDriver, "x11" ) == 0 )
    {

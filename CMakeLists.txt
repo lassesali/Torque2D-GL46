@@ -81,6 +81,35 @@ if(EMSCRIPTEN)
         OFF)
 endif()
 
+# iOS must be detected explicitly: APPLE is also true on iOS, so it has to be
+# distinguished from the macOS desktop build (set via -DCMAKE_SYSTEM_NAME=iOS).
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(TORQUE_IOS TRUE)
+endif()
+
+# Set macOS architecture and deployment target BEFORE adding third-party
+# subdirectories (including vendored SDL3) so every static library matches the
+# Torque2D target's ABI and deployment floor.
+if(APPLE AND NOT TORQUE_IOS)
+    # Apple Silicon (arm64) build. The legacy Xcode project hard-coded x86_64;
+    # we target arm64 natively. Set explicitly so the architecture is reproducible
+    # regardless of the host (and overridable via -DCMAKE_OSX_ARCHITECTURES for a
+    # universal/Intel build).
+    if(NOT CMAKE_OSX_ARCHITECTURES)
+        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS build architecture" FORCE)
+    endif()
+
+    # Minimum macOS. Without this the binary inherits the build host's SDK default
+    # (e.g. 14.6), needlessly excluding older Macs. 11.0 (Big Sur) is the floor for
+    # arm64 and is the lowest that still lets users on older systems run the game.
+    # It does NOT constrain a future Metal renderer: Metal/MetalKit have shipped
+    # since 10.11, so 11.0 fully supports Metal (only the Metal 3 feature set would
+    # need 13.0+, which a 2D engine won't require). Overridable on the command line.
+    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
+    endif()
+endif()
+
 # ----------------------------------------------------------------------------
 # Third-party static libraries (libogg, libvorbis, lpng, ljpeg, SDL3, zlib)
 # ----------------------------------------------------------------------------
@@ -107,12 +136,6 @@ endif()
 # ----------------------------------------------------------------------------
 include(cmake/EngineSources.cmake)      # -> TORQUE_ENGINE_SOURCES
 include(cmake/PlatformSources.cmake)    # -> TORQUE_PLATFORM_SOURCES_{WINDOWS,MACOS,LINUX}
-
-# iOS must be detected explicitly: APPLE is also true on iOS, so it has to be
-# distinguished from the macOS desktop build (set via -DCMAKE_SYSTEM_NAME=iOS).
-if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(TORQUE_IOS TRUE)
-endif()
 
 # Select the active platform's OS-specific back-end sources. Note ANDROID and
 # EMSCRIPTEN are also UNIX, so they must be matched before the UNIX (Linux) branch.
@@ -271,24 +294,6 @@ if(WIN32)
 endif()
 
 if(APPLE AND NOT TORQUE_IOS)
-    # Apple Silicon (arm64) build. The legacy Xcode project hard-coded x86_64;
-    # we target arm64 natively. Set explicitly so the architecture is reproducible
-    # regardless of the host (and overridable via -DCMAKE_OSX_ARCHITECTURES for a
-    # universal/Intel build).
-    if(NOT CMAKE_OSX_ARCHITECTURES)
-        set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "macOS build architecture" FORCE)
-    endif()
-
-    # Minimum macOS. Without this the binary inherits the build host's SDK default
-    # (e.g. 14.6), needlessly excluding older Macs. 11.0 (Big Sur) is the floor for
-    # arm64 and is the lowest that still lets users on older systems run the game.
-    # It does NOT constrain a future Metal renderer: Metal/MetalKit have shipped
-    # since 10.11, so 11.0 fully supports Metal (only the Metal 3 feature set would
-    # need 13.0+, which a 2D engine won't require). Overridable on the command line.
-    if(NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS version" FORCE)
-    endif()
-
     # Build a proper .app bundle, NOT a bare command-line tool. Without this CMake
     # emits a `com.apple.product-type.tool` target; when Xcode runs a tool that then
     # turns itself into a GUI app (NSApplication / setActivationPolicy:Regular),

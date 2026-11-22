@@ -42,6 +42,8 @@
 #include "console/console.h"
 #endif
 
+#include "math/mMathFn.h"
+
 #if defined(TORQUE_SDL) || defined(TORQUE_SDL_GAMEPAD)
 #ifndef _SDLGAMEPAD_H_
 #include "platformSDL/sdlGamepad.h"

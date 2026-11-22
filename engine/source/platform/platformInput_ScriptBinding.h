@@ -21,6 +21,7 @@
 //-----------------------------------------------------------------------------
 
 #include "console/console.h"
+#include "platform/event.h"
 #include "platform/platformInput.h"
 #if defined(TORQUE_SDL) || defined(TORQUE_SDL_GAMEPAD)
 #ifndef _SDLGAMEPAD_H_

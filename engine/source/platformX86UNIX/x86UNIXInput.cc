@@ -28,6 +28,7 @@
 #include "console/console.h"
 #include "platformX86UNIX/x86UNIXState.h"
 #include "platformX86UNIX/x86UNIXInputManager.h"
+#include "platformSDL/sdlGamepad.h"
 #include "platform/platformInput_ScriptBinding.h"
 #include "platformX86UNIX/x86UNIXInput_ScriptBinding.h"
 
@@ -136,6 +137,25 @@ void Input::disable()
 {
    if ( smManager && smManager->isEnabled() )
       smManager->disable();
+}
+
+//------------------------------------------------------------------------------
+bool Input::enableJoystick()
+{
+   UInputManager* uInputManager = dynamic_cast<UInputManager*>( smManager );
+   if ( uInputManager )
+      return uInputManager->enableJoystick();
+   return SDLGamepad::enableJoystick();
+}
+
+//------------------------------------------------------------------------------
+void Input::disableJoystick()
+{
+   UInputManager* uInputManager = dynamic_cast<UInputManager*>( smManager );
+   if ( uInputManager )
+      uInputManager->disableJoystick();
+   else
+      SDLGamepad::disableJoystick();
 }
 
 //------------------------------------------------------------------------------
