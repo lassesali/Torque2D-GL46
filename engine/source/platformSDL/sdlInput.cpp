@@ -31,7 +31,7 @@
 #include "console/console.h"
 #include "platformSDL/sdlInput.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #define NUM_KEYS ( KEY_OEM_102 + 1 )
 
@@ -49,7 +49,9 @@
 static U16 getUnshiftedCharacter( U32 torqueKey )
 {
    const SDL_Keycode key = SDL_GetKeyFromScancode(
-      (SDL_Scancode)KeyMapSDL::getSDLScanCodeFromTorque( torqueKey ) );
+      (SDL_Scancode)KeyMapSDL::getSDLScanCodeFromTorque( torqueKey ),
+      SDL_KMOD_NONE,
+      false );
 
    if ( key < 0x20 || key == 0x7F || key > 0xFFFF )
       return 0;
@@ -74,7 +76,7 @@ U16 Input::getKeyCode( U16 asciiCode )
    if ( key >= 'A' && key <= 'Z' )
       key += 'a' - 'A';
 
-   return (U16)KeyMapSDL::getTorqueScanCodeFromSDL( SDL_GetScancodeFromKey( key ) );
+   return (U16)KeyMapSDL::getTorqueScanCodeFromSDL( SDL_GetScancodeFromKey( key, NULL ) );
 }
 
 //------------------------------------------------------------------------------
@@ -133,18 +135,18 @@ bool Platform::setClipboard(const char *text)
    if (!text)
       return false;
 
-   return SDL_SetClipboardText(text) == 0;
+   return SDL_SetClipboardText(text);
 }
 
 //------------------------------------------------------------------------------
-// The scancode table. SDL numbers its scancodes up to SDL_NUM_SCANCODES (512),
+// The scancode table. SDL numbers its scancodes up to SDL_SCANCODE_COUNT (512),
 // past the 256 entries Torque3D gives its table -- a media key's scancode read
 // off the end of it -- so the SDL side is sized to SDL's range here, and both
 // lookups check theirs.
 namespace
 {
    const U32 TorqueTableSize = 256;
-   U32 SDL_T2D[SDL_NUM_SCANCODES];
+   U32 SDL_T2D[SDL_SCANCODE_COUNT];
    U32 T2D_SDL[TorqueTableSize];
    static bool _buildScanCode = true;
 }
@@ -159,7 +161,7 @@ static void buildScanCodeArray()
 {
    _buildScanCode = false;
 
-   for(U32 i = 0; i < SDL_NUM_SCANCODES; ++i)
+   for(U32 i = 0; i < SDL_SCANCODE_COUNT; ++i)
       SDL_T2D[i] = KEY_NULL;
    for(U32 i = 0; i < TorqueTableSize; ++i)
       T2D_SDL[i] = SDL_SCANCODE_UNKNOWN;
@@ -309,7 +311,7 @@ U32 KeyMapSDL::getTorqueScanCodeFromSDL(U32 sdl)
    if(_buildScanCode)
       buildScanCodeArray();
 
-   if(sdl >= SDL_NUM_SCANCODES)
+   if(sdl >= SDL_SCANCODE_COUNT)
       return KEY_NULL;
 
    return SDL_T2D[sdl];
@@ -333,26 +335,26 @@ U32 KeyMapSDL::getSDLScanCodeFromTorque(U32 torque)
 // out as both Shifts. Here each side reports only itself, as the SDL 1.2
 // back-end did. A binding on "shift" matches either all the same: ActionMap
 // widens a sided bit to both sides before it compares.
-U32 KeyMapSDL::getTorqueModFromSDL(U16 mod)
+U32 KeyMapSDL::getTorqueModFromSDL(U32 mod)
 {
    U32 ret = 0;
 
-   if (mod & KMOD_LSHIFT)
+   if (mod & SDL_KMOD_LSHIFT)
       ret |= SI_LSHIFT;
 
-   if (mod & KMOD_RSHIFT)
+   if (mod & SDL_KMOD_RSHIFT)
       ret |= SI_RSHIFT;
 
-   if (mod & KMOD_LCTRL)
+   if (mod & SDL_KMOD_LCTRL)
       ret |= SI_LCTRL;
 
-   if (mod & KMOD_RCTRL)
+   if (mod & SDL_KMOD_RCTRL)
       ret |= SI_RCTRL;
 
-   if (mod & KMOD_LALT)
+   if (mod & SDL_KMOD_LALT)
       ret |= SI_LALT;
 
-   if (mod & KMOD_RALT)
+   if (mod & SDL_KMOD_RALT)
       ret |= SI_RALT;
 
    return ret;

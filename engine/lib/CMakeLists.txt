@@ -23,57 +23,85 @@ function(torque_thirdparty_lib name)
     set_target_properties(${name} PROPERTIES FOLDER "ThirdParty")
 endfunction()
 
-# --- SDL 2 (Linux desktop only) ----------------------------------------------
-# Vendored from Torque3D and built by SDL's own CMake, the way Torque3D builds it
-# (see sdl/README-TORQUE2D.md) -- except static rather than shared, so the engine
-# still ships as one executable. The Web build takes SDL 2 from Emscripten's port
-# (-sUSE_SDL=2) instead, and Windows, macOS, iOS and Android don't use SDL.
-# EXCLUDE_FROM_ALL: nothing is built unless the engine links SDL2::SDL2-static.
-if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
-    # SDL's X11 driver is the one the back-end runs on, and SDL's configure
-    # quietly leaves out each X11 extension whose headers it can't find: the
-    # engine still builds, but without display modes through XRandR, cursors,
-    # the XInput2 mouse or screensaver inhibit, and nothing says why. So every
-    # header is required here, before SDL looks. The result variables are the
-    # ones SDL's own find_file calls use (sdl/cmake/sdlchecks.cmake), so SDL
-    # reuses what is found here; one left NOTFOUND is searched for again on the
-    # next configure, so installing the package and configuring again is enough.
-    set(TORQUE_SDL_X11_VARS
-        TORQUE_HAVE_XLIB_H HAVE_XEXT_H HAVE_XRANDR_H HAVE_XCURSOR_H
-        HAVE_XFIXES_H_ HAVE_XINPUT2_H HAVE_XSS_H)
-    set(TORQUE_SDL_X11_HEADERS
-        X11/Xlib.h X11/extensions/Xext.h X11/extensions/Xrandr.h X11/Xcursor/Xcursor.h
-        X11/extensions/Xfixes.h X11/extensions/XInput2.h X11/extensions/scrnsaver.h)
-    set(TORQUE_SDL_X11_PACKAGES
-        libx11-dev libxext-dev libxrandr-dev libxcursor-dev
-        libxfixes-dev libxi-dev libxss-dev)
-    set(missing "")
-    foreach(var header package IN ZIP_LISTS
-            TORQUE_SDL_X11_VARS TORQUE_SDL_X11_HEADERS TORQUE_SDL_X11_PACKAGES)
-        find_file(${var} NAMES "${header}")
-        if(NOT ${var})
-            list(APPEND missing "${package} (${header})")
+# --- SDL3 ---------------------------------------------------------------------
+# Vendored from upstream SDL release-3.2.30 (see sdl/README-TORQUE2D.md) as a
+# static library (SDL3::SDL3-static) so the engine still ships as one binary.
+#   * Linux: full video, events, joystick, gamepad, and haptic support.
+#   * Windows & macOS: native Win32/Cocoa windowing is preserved; SDL3 is built
+#     strictly for joystick, gamepad, HIDAPI, and haptic support (SDL_VIDEO=OFF).
+#   * Web (Emscripten): uses Emscripten's -sUSE_SDL=3 port by default, or this
+#     vendored target when TORQUE_EMSCRIPTEN_VENDORED_SDL3=ON.
+#   * iOS & Android: SDL3 is not built or linked.
+# EXCLUDE_FROM_ALL: nothing is built unless the engine links SDL3::SDL3-static.
+if((UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
+        OR WIN32
+        OR (APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        OR (EMSCRIPTEN AND TORQUE_EMSCRIPTEN_VENDORED_SDL3))
+    if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
+        # SDL's X11 driver needs the X11 development headers so display modes,
+        # cursors, XInput2, and screensaver inhibit are compiled in.
+        set(TORQUE_SDL_X11_VARS
+            TORQUE_HAVE_XLIB_H HAVE_XEXT_H HAVE_XRANDR_H HAVE_XCURSOR_H
+            HAVE_XFIXES_H_ HAVE_XINPUT2_H HAVE_XSS_H)
+        set(TORQUE_SDL_X11_HEADERS
+            X11/Xlib.h X11/extensions/Xext.h X11/extensions/Xrandr.h X11/Xcursor/Xcursor.h
+            X11/extensions/Xfixes.h X11/extensions/XInput2.h X11/extensions/scrnsaver.h)
+        set(TORQUE_SDL_X11_PACKAGES
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev
+            libxfixes-dev libxi-dev libxss-dev)
+        set(missing "")
+        foreach(var header package IN ZIP_LISTS
+                TORQUE_SDL_X11_VARS TORQUE_SDL_X11_HEADERS TORQUE_SDL_X11_PACKAGES)
+            find_file(${var} NAMES "${header}")
+            if(NOT ${var})
+                list(APPEND missing "${package} (${header})")
+            endif()
+        endforeach()
+        if(missing)
+            list(JOIN missing "\n  " missing)
+            message(FATAL_ERROR
+                "SDL3's X11 development headers are missing:\n  ${missing}\n"
+                "Without them SDL builds without display modes, cursors, the XInput2 "
+                "mouse or screensaver inhibit. Install them, then configure again:\n"
+                "  Debian/Ubuntu: sudo apt install libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev\n"
+                "  Arch:          sudo pacman -S libx11 libxext libxrandr libxcursor libxfixes libxi libxss\n"
+                "  Fedora:        sudo dnf install libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXfixes-devel libXi-devel libXScrnSaver-devel\n"
+                "A 32-bit build needs the :i386 versions (cmake/BUILD-PLATFORM-NOTES.md).")
         endif()
-    endforeach()
-    if(missing)
-        list(JOIN missing "\n  " missing)
-        message(FATAL_ERROR
-            "SDL 2's X11 development headers are missing:\n  ${missing}\n"
-            "Without them SDL builds without display modes, cursors, the XInput2 "
-            "mouse or screensaver inhibit. Install them, then configure again:\n"
-            "  Debian/Ubuntu: sudo apt install libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev\n"
-            "  Arch:          sudo pacman -S libx11 libxext libxrandr libxcursor libxfixes libxi libxss\n"
-            "  Fedora:        sudo dnf install libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXfixes-devel libXi-devel libXScrnSaver-devel\n"
-            "A 32-bit build needs the :i386 versions (cmake/BUILD-PLATFORM-NOTES.md).")
     endif()
 
-    set(SDL_SHARED OFF CACHE BOOL "Build a shared version of the library" FORCE)
-    set(SDL_STATIC ON CACHE BOOL "Build a static version of the library" FORCE)
-    set(SDL_TEST OFF CACHE BOOL "Build the SDL2_test library" FORCE)
-    set(SDL2_DISABLE_SDL2MAIN ON CACHE BOOL "The engine has its own main()" FORCE)
-    set(SDL2_DISABLE_INSTALL ON CACHE BOOL "Don't install SDL with the engine" FORCE)
-    set(SDL2_DISABLE_UNINSTALL ON CACHE BOOL "Don't add an uninstall target" FORCE)
-    add_subdirectory(sdl ${CMAKE_CURRENT_BINARY_DIR}/sdl2 EXCLUDE_FROM_ALL)
+    set(SDL_SHARED OFF CACHE BOOL "Build a shared version of SDL3" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "Build a static version of SDL3" FORCE)
+    set(SDL_TESTS OFF CACHE BOOL "Build the SDL3 test suite" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "Build the SDL3_test library" FORCE)
+    set(SDL_EXAMPLES OFF CACHE BOOL "Build SDL3 example programs" FORCE)
+    set(SDL_INSTALL OFF CACHE BOOL "Disable SDL3 installation rules" FORCE)
+    set(SDL_UNINSTALL OFF CACHE BOOL "Disable SDL3 uninstall target" FORCE)
+
+    set(SDL_AUDIO OFF CACHE BOOL "Enable SDL3 audio subsystem" FORCE)
+    set(SDL_RENDER OFF CACHE BOOL "Enable SDL3 2D render subsystem" FORCE)
+    set(SDL_CAMERA OFF CACHE BOOL "Enable SDL3 camera subsystem" FORCE)
+    set(SDL_GPU OFF CACHE BOOL "Enable SDL3 GPU subsystem" FORCE)
+    set(SDL_DIALOG OFF CACHE BOOL "Enable SDL3 dialog subsystem" FORCE)
+    set(SDL_JOYSTICK ON CACHE BOOL "Enable SDL3 joystick/gamepad subsystem" FORCE)
+    set(SDL_HAPTIC ON CACHE BOOL "Enable SDL3 haptic subsystem" FORCE)
+    set(SDL_HIDAPI ON CACHE BOOL "Enable SDL3 HIDAPI controller driver" FORCE)
+
+    if(WIN32 OR (APPLE AND NOT CMAKE_SYSTEM_NAME STREQUAL "iOS"))
+        set(SDL_VIDEO OFF CACHE BOOL "Enable SDL3 video subsystem" FORCE)
+        set(SDL_POWER OFF CACHE BOOL "Enable SDL3 power subsystem" FORCE)
+        set(SDL_SENSOR OFF CACHE BOOL "Enable SDL3 sensor subsystem" FORCE)
+    else()
+        set(SDL_VIDEO ON CACHE BOOL "Enable SDL3 video subsystem" FORCE)
+    endif()
+
+    add_subdirectory(sdl ${CMAKE_CURRENT_BINARY_DIR}/sdl3 EXCLUDE_FROM_ALL)
+    if(TARGET SDL3-static)
+        torque_thirdparty_lib(SDL3-static)
+    endif()
+    if(TARGET SDL_uclibc)
+        torque_thirdparty_lib(SDL_uclibc)
+    endif()
 endif()
 
 # --- zlib (built from source on desktop; Android uses the NDK system libz) -----

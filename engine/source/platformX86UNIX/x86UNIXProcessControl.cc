@@ -37,7 +37,7 @@
 #include <signal.h>
 
 #ifndef DEDICATED
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #endif
 
 extern void SendQuitEvent();

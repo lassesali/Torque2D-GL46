@@ -29,6 +29,9 @@
 #include "console/consoleTypes.h"
 #include "input/actionMap.h"
 #include "game/gameInterface.h"
+#ifdef TORQUE_SDL_GAMEPAD
+#include "platformSDL/sdlGamepad.h"
+#endif
 #include <Xinput.h>
 
 //------------------------------------------------------------------------------
@@ -60,8 +63,10 @@ void DInputManager::init()
 {
    Con::addVariable( "pref::Input::KeyboardEnabled",  TypeBool, &smKeyboardEnabled );
    Con::addVariable( "pref::Input::MouseEnabled",     TypeBool, &smMouseEnabled );
+#ifndef TORQUE_SDL_GAMEPAD
    Con::addVariable( "pref::Input::JoystickEnabled",  TypeBool, &smJoystickEnabled );
    Con::addVariable( "pref::Input::XInputEnabled", TypeBool, &smXInputEnabled );
+#endif
 }
 
 //------------------------------------------------------------------------------
@@ -71,6 +76,7 @@ bool DInputManager::enable()
 
    disable();
 
+#ifndef TORQUE_SDL_GAMEPAD
    mXInputLib = LoadLibrary( dT("xinput9_1_0.dll") );
 
    if( mXInputLib )
@@ -89,6 +95,7 @@ bool DInputManager::enable()
    {
 	   Con::warnf("Unable to enable XInput.");
    }
+#endif // !TORQUE_SDL_GAMEPAD
 
 
    mDInputLib = LoadLibrary( dT("DInput8.dll") );
@@ -225,8 +232,10 @@ void DInputManager::unacquire( U8 deviceType, U8 deviceID )
 //------------------------------------------------------------------------------
 void DInputManager::process()
 {
+#ifndef TORQUE_SDL_GAMEPAD
 	if ( isXInputActive() )
 		processXInput();
+#endif
 
    DInputDevice* dptr;
    for ( iterator ptr = begin(); ptr != end(); ptr++ )
@@ -246,8 +255,12 @@ void DInputManager::enumerateDevices()
       DInputDevice::smDInputInterface = mDInputInterface;
       mDInputInterface->EnumDevices( DI8DEVTYPE_KEYBOARD, EnumDevicesProc, this, DIEDFL_ATTACHEDONLY );
       mDInputInterface->EnumDevices( DI8DEVTYPE_MOUSE,    EnumDevicesProc, this, DIEDFL_ATTACHEDONLY );
+#ifndef TORQUE_SDL_GAMEPAD
+      // Controllers and joysticks route through SDLGamepad when TORQUE_SDL_GAMEPAD
+      // is active so DualSense/Xbox/Switch/generic devices do not double-fire.
       mDInputInterface->EnumDevices( DI8DEVTYPE_JOYSTICK, EnumDevicesProc, this, DIEDFL_ATTACHEDONLY );
       mDInputInterface->EnumDevices( DI8DEVTYPE_GAMEPAD,  EnumDevicesProc, this, DIEDFL_ATTACHEDONLY );
+#endif
    }
 }
 
@@ -398,6 +411,9 @@ void DInputManager::deactivateMouse()
 //------------------------------------------------------------------------------
 bool DInputManager::enableJoystick()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::enableJoystick();
+#else
    DInputManager* mgr = dynamic_cast<DInputManager*>( Input::getManager() );
    if ( !mgr || !mgr->isEnabled() )
       return( false );
@@ -419,11 +435,15 @@ bool DInputManager::enableJoystick()
    }
 
    return( smJoystickEnabled );
+#endif
 }
 
 //------------------------------------------------------------------------------
 void DInputManager::disableJoystick()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::disableJoystick();
+#else
    DInputManager* mgr = dynamic_cast<DInputManager*>( Input::getManager() );
    if ( !mgr || !mgr->isEnabled() || !smJoystickEnabled )
       return;
@@ -431,37 +451,51 @@ void DInputManager::disableJoystick()
    mgr->deactivateJoystick();
    smJoystickEnabled = false;
    Con::printf( "DirectInput joystick disabled." );
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::isJoystickEnabled()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::isJoystickEnabled();
+#else
    return( smJoystickEnabled );
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::activateJoystick()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return false;
+#else
    if ( !mEnabled || !Input::isActive() || !smJoystickEnabled )
       return( false );
 
    mJoystickActive = acquire( JoystickDeviceType, SI_ANY );
    return( mJoystickActive );
+#endif
 }
 
 //------------------------------------------------------------------------------
 void DInputManager::deactivateJoystick()
 {
+#ifndef TORQUE_SDL_GAMEPAD
    if ( mEnabled && mJoystickActive )
    {
       unacquire( JoystickDeviceType, SI_ANY );
       mJoystickActive = false;
    }
+#endif
 }
 
 //------------------------------------------------------------------------------
 const char* DInputManager::getJoystickAxesString( U32 deviceID )
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::getJoystickAxesString( deviceID );
+#else
    DInputDevice* dptr;
    for ( iterator ptr = begin(); ptr != end(); ptr++ )
    {
@@ -471,10 +505,15 @@ const char* DInputManager::getJoystickAxesString( U32 deviceID )
    }
 
    return( "" );
+#endif
 }
 
 bool DInputManager::enableXInput()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::setGamepadEnabled( true );
+   return SDLGamepad::isInitialized() || SDLGamepad::init();
+#else
    // Largely, this series of functions is identical to the Joystick versions,
    // except that XInput cannot be "activated" or "deactivated". You either have
    // the DLL or you don't. Beyond that, you have up to four controllers
@@ -500,28 +539,40 @@ bool DInputManager::enableXInput()
    }
 
    return( smXInputEnabled );
+#endif
 }
 
 //------------------------------------------------------------------------------
 void DInputManager::disableXInput()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::setGamepadEnabled( false );
+#else
    DInputManager* mgr = dynamic_cast<DInputManager*>( Input::getManager() );
    if ( !mgr || !mgr->isEnabled())
       return;
 
    mgr->deactivateXInput();
    Con::printf( "XInput disabled." );
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::isXInputEnabled()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::isGamepadEnabled();
+#else
    return( smXInputEnabled );
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::isXInputConnected(int controllerID)
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::isGamepadConnected( controllerID );
+#else
     if (controllerID >= XINPUT_MAX_CONTROLLERS || controllerID < 0)
     {
         Con::warnf("Invalid device index: %d. Index should be between 0 and %d.", controllerID, XINPUT_MAX_CONTROLLERS - 1);
@@ -529,10 +580,14 @@ bool DInputManager::isXInputConnected(int controllerID)
     }
 	
 	return( mXInputStateNew[controllerID].bConnected );
+#endif
 }
 
 int DInputManager::getXInputState(int controllerID, int property, bool current)
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::getXInputState( controllerID, property, current );
+#else
    if (controllerID >= XINPUT_MAX_CONTROLLERS || controllerID < 0)
    {
       Con::warnf("Invalid device index: %d. Index should be between 0 and %d.", controllerID, XINPUT_MAX_CONTROLLERS - 1);
@@ -577,32 +632,45 @@ int DInputManager::getXInputState(int controllerID, int property, bool current)
    }
 
    return -1;
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::activateXInput()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::activate();
+   return SDLGamepad::isActive();
+#else
    if ( !mEnabled || !Input::isActive())
       return( false );
 
    mXInputActive = true; //acquire( GamepadDeviceType, SI_ANY );
 
    return( mXInputActive );
+#endif
 }
 
 //------------------------------------------------------------------------------
 void DInputManager::deactivateXInput()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::deactivate();
+#else
    if ( mEnabled && mXInputActive )
    {
       unacquire( GamepadDeviceType, SI_ANY );
       mXInputActive = false;
    }
+#endif
 }
 
 //------------------------------------------------------------------------------
 bool DInputManager::rumble( const char *pDeviceName, float x, float y )
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   return SDLGamepad::rumbleDevice( pDeviceName, x, y );
+#else
    // Determine the device
    U32 deviceType;
    U32 deviceInst;
@@ -654,6 +722,7 @@ bool DInputManager::rumble( const char *pDeviceName, float x, float y )
       Con::printf("DInputManager::rumble - only supports joystick and xinput/gamepad devices");
       return false;
    }
+#endif
 }
 
 void DInputManager::buildXInputEvent( U32 deviceInst, XInputEventType objType, InputObjectInstances objInst, InputActionType action, float fValue )

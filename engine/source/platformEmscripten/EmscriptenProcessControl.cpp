@@ -28,7 +28,7 @@
 #include "game/gameInterface.h"
 
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 void Platform::postQuitMessage(const U32 in_quitVal)
 {

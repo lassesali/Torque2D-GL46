@@ -27,8 +27,8 @@
 #include "platform/types.h"
 #endif
 
-/// The keyboard as SDL 2 reports it, in Torque's terms. This is Torque3D's
-/// platformSDL/sdlInput.h, shared by every back-end built on SDL 2 -- Linux and
+/// The keyboard as SDL3 reports it, in Torque's terms. This is Torque3D's
+/// platformSDL/sdlInput.h, shared by every back-end built on SDL3 -- Linux and
 /// the web build -- so it must stay free of anything X11 or browser-specific.
 ///
 /// A key is identified by its SDL_Scancode: the physical key, wherever the
@@ -52,9 +52,9 @@ namespace KeyMapSDL
    /// The SDL_Scancode for a KEY_* code, or SDL_SCANCODE_UNKNOWN.
    U32 getSDLScanCodeFromTorque(U32 torque);
 
-   /// The SI_* modifier bits for an SDL_Keymod -- a keysym's mod, or
+   /// The SI_* modifier bits for an SDL_Keymod -- a key event's mod, or
    /// SDL_GetModState() for an event that has none of its own.
-   U32 getTorqueModFromSDL(U16 mod);
+   U32 getTorqueModFromSDL(U32 mod);
 }
 
 #endif // _SDLINPUT_H_

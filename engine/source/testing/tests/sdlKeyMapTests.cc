@@ -23,7 +23,7 @@
 // We don't want tests in a shipping version.
 #ifndef TORQUE_SHIPPING
 
-// platformSDL is compiled only into the back-ends built on SDL 2.
+// platformSDL is compiled only into the back-ends built on SDL3.
 #ifdef TORQUE_SDL
 
 #ifndef _UNIT_TESTING_H_
@@ -42,7 +42,7 @@
 #include "platformSDL/sdlInput.h"
 #endif
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 // platformSDL/sdlInput.cpp's tables: which physical key is which KEY_* code,
 // and how SDL's modifier bits read as Torque's. What a key *types* depends on
@@ -127,7 +127,7 @@ TEST( SdlKeyMapTests, KeysTorqueHasNoCodeForMapToNull )
     // table, 256 entries long, reads past the end of.
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_AUDIONEXT ) );
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_AC_BACK ) );
-    ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_NUM_SCANCODES ) );
+    ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( SDL_SCANCODE_COUNT ) );
     ASSERT_EQ( (U32)KEY_NULL, KeyMapSDL::getTorqueScanCodeFromSDL( 0xFFFFFFFF ) );
 }
 
@@ -161,31 +161,31 @@ TEST( SdlKeyMapTests, TorqueCodesMapBackToTheirScancodes )
 
 TEST( SdlKeyMapTests, ModifiersKeepTheirSide )
 {
-    ASSERT_EQ( (U32)SI_LSHIFT, KeyMapSDL::getTorqueModFromSDL( KMOD_LSHIFT ) );
-    ASSERT_EQ( (U32)SI_RSHIFT, KeyMapSDL::getTorqueModFromSDL( KMOD_RSHIFT ) );
-    ASSERT_EQ( (U32)SI_LCTRL, KeyMapSDL::getTorqueModFromSDL( KMOD_LCTRL ) );
-    ASSERT_EQ( (U32)SI_RCTRL, KeyMapSDL::getTorqueModFromSDL( KMOD_RCTRL ) );
-    ASSERT_EQ( (U32)SI_LALT, KeyMapSDL::getTorqueModFromSDL( KMOD_LALT ) );
-    ASSERT_EQ( (U32)SI_RALT, KeyMapSDL::getTorqueModFromSDL( KMOD_RALT ) );
+    ASSERT_EQ( (U32)SI_LSHIFT, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_LSHIFT ) );
+    ASSERT_EQ( (U32)SI_RSHIFT, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_RSHIFT ) );
+    ASSERT_EQ( (U32)SI_LCTRL, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_LCTRL ) );
+    ASSERT_EQ( (U32)SI_RCTRL, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_RCTRL ) );
+    ASSERT_EQ( (U32)SI_LALT, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_LALT ) );
+    ASSERT_EQ( (U32)SI_RALT, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_RALT ) );
 
     ASSERT_EQ( (U32)( SI_LSHIFT | SI_RCTRL | SI_LALT ),
-        KeyMapSDL::getTorqueModFromSDL( (U16)( KMOD_LSHIFT | KMOD_RCTRL | KMOD_LALT ) ) );
+        KeyMapSDL::getTorqueModFromSDL( (U32)( SDL_KMOD_LSHIFT | SDL_KMOD_RCTRL | SDL_KMOD_LALT ) ) );
     ASSERT_EQ( (U32)SI_SHIFT,
-        KeyMapSDL::getTorqueModFromSDL( (U16)( KMOD_LSHIFT | KMOD_RSHIFT ) ) );
+        KeyMapSDL::getTorqueModFromSDL( (U32)( SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT ) ) );
 }
 
 //-----------------------------------------------------------------------------
 
 TEST( SdlKeyMapTests, LocksAndOtherModifiersAreNotTorqueModifiers )
 {
-    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( KMOD_NONE ) );
-    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( KMOD_CAPS ) );
-    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( KMOD_NUM ) );
-    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( KMOD_LGUI ) );
-    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( KMOD_MODE ) );
+    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_NONE ) );
+    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_CAPS ) );
+    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_NUM ) );
+    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_LGUI ) );
+    ASSERT_EQ( 0u, KeyMapSDL::getTorqueModFromSDL( SDL_KMOD_MODE ) );
 
     // Num Lock on doesn't disturb Shift.
-    ASSERT_EQ( (U32)SI_LSHIFT, KeyMapSDL::getTorqueModFromSDL( (U16)( KMOD_NUM | KMOD_LSHIFT ) ) );
+    ASSERT_EQ( (U32)SI_LSHIFT, KeyMapSDL::getTorqueModFromSDL( (U32)( SDL_KMOD_NUM | SDL_KMOD_LSHIFT ) ) );
 }
 
 #endif // TORQUE_SDL

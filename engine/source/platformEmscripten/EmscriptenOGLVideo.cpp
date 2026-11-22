@@ -29,8 +29,9 @@
 #include "platformEmscripten/platformEmscripten.h"
 #include "platformEmscripten/platformGL.h"
 #include "platformEmscripten/EmscriptenOGLVideo.h"
+#include "platformSDL/sdlTextInput.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <emscripten/emscripten.h>
 #include <emscripten/html5.h>
 
@@ -58,7 +59,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void Torque2D_onCanvasResized(S32 width, S32 hei
 }
 
 // Keep Emscripten's Browser fullscreen helper aware of the SDL canvas's
-// windowed pixel dimensions. SDL2 updates #canvas via
+// windowed pixel dimensions. SDL3 updates #canvas via
 // emscripten_set_canvas_element_size without setting canvas.widthNative /
 // heightNative, so clicking the HTML Fullscreen button otherwise sets
 // canvas.width/height to undefined (0 -> 1x1 WebGL buffer) while glViewport
@@ -210,29 +211,35 @@ void OpenGLDevice::loadResolutions()
    addResolution(1280, 1024);
    addResolution(1600, 1200);
 
-   // ...and the screen's own size, which is the one mode SDL 2's Emscripten
+   // ...and the screen's own size, which is the one mode SDL3's Emscripten
    // driver lists.
-   const int numModes = SDL_GetNumDisplayModes(0);
-   for (int i = 0; i < numModes; ++i)
+   const SDL_DisplayID displayId = SDL_GetPrimaryDisplay();
+   int numModes = 0;
+   SDL_DisplayMode** modes = displayId ? SDL_GetFullscreenDisplayModes(displayId, &numModes) : NULL;
+   if (modes)
    {
-      SDL_DisplayMode mode;
-      if (SDL_GetDisplayMode(0, i, &mode) != 0)
-         continue;
-
-      // do we already have this mode?
-      bool found = false;
-      for (Vector<Resolution>::iterator iter = mResolutionList.begin();
-           iter != mResolutionList.end();
-           ++iter)
+      for (int i = 0; i < numModes; ++i)
       {
-         if (iter->w == mode.w && iter->h == mode.h)
+         const SDL_DisplayMode* mode = modes[i];
+         if (!mode)
+            continue;
+
+         // do we already have this mode?
+         bool found = false;
+         for (Vector<Resolution>::iterator iter = mResolutionList.begin();
+              iter != mResolutionList.end();
+              ++iter)
          {
-            found = true;
-            break;
+            if (iter->w == mode->w && iter->h == mode->h)
+            {
+               found = true;
+               break;
+            }
          }
+         if (!found)
+            addResolution(mode->w, mode->h, false);
       }
-      if (!found)
-         addResolution(mode.w, mode.h, false);
+      SDL_free(modes);
    }
 }
 
@@ -330,7 +337,7 @@ static bool CreateGLWindow( U32 width, U32 height )
    // window size, the mouse and so the whole GUI stay in page pixels. On a
    // high-DPI screen the browser scales the canvas up instead.
    SDL_Window* window = SDL_CreateWindow( gPlatState.appWindowTitle,
-      SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, width, height,
+      width, height,
       SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE );
    if ( window == NULL )
    {
@@ -351,10 +358,10 @@ static bool CreateGLWindow( U32 width, U32 height )
       return false;
    }
 
-   if ( SDL_GL_MakeCurrent( window, sGLContext ) != 0 )
+   if ( !SDL_GL_MakeCurrent( window, sGLContext ) )
    {
       Con::printf( "Unable to make the OpenGL context current: %s", SDL_GetError() );
-      SDL_GL_DeleteContext( sGLContext );
+      SDL_GL_DestroyContext( sGLContext );
       sGLContext = NULL;
       SDL_DestroyWindow( window );
       return false;
@@ -362,6 +369,7 @@ static bool CreateGLWindow( U32 width, U32 height )
 
    gPlatState.sdlWindow = window;
    gPlatState.windowCreated = true;
+   SDLTextInput::setWindow( window );
    return true;
 }
 
@@ -445,7 +453,7 @@ bool OpenGLDevice::setScreenMode( U32 width, U32 height, U32 bpp,
       // fullscreen needs no permission. Either way the canvas's new size
       // arrives later as a resize, and followWindow picks it up.
       if ( fullScreen != wasFullScreen )
-         SDL_SetWindowFullscreen( window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
+         SDL_SetWindowFullscreen( window, fullScreen );
 
       // A windowed size is the game's to choose only when the page leaves it
       // the choice. A page-sized canvas keeps the page's size -- setting it

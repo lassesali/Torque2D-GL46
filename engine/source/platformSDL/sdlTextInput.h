@@ -28,9 +28,10 @@
 #endif
 
 struct InputEvent;
+struct SDL_Window;
 
-/// Typed text, as SDL 2 reports it, turned into Torque input events. Shared by
-/// every back-end built on SDL 2, so free of anything X11.
+/// Typed text, as SDL3 reports it, turned into Torque input events. Shared by
+/// every back-end built on SDL3, so free of anything X11.
 ///
 /// A key event says which key moved, not what it typed: that depends on the
 /// layout, on dead keys and on any input method in between, and SDL works it
@@ -58,6 +59,10 @@ namespace SDLTextInput
       TEXT_INPUT = 1, ///< Text events as well as key events.
       RAW_INPUT = 2   ///< Key events only.
    };
+
+   /// Associate the active SDL window used for SDL_StartTextInput /
+   /// SDL_StopTextInput in SDL3.
+   void setWindow( SDL_Window* window );
 
    /// Ask for text input to be turned on or off at the end of the frame
    /// (Torque3D's updateSDLTextInputState). The last request in a frame wins.

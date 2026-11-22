@@ -24,7 +24,7 @@
 #include "platformEmscripten/platformEmscripten.h"
 #include "game/gameInterface.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include <unistd.h>
 //--------------------------------------
 void Platform::getLocalTime(LocalTime &lt)
@@ -37,14 +37,14 @@ void Platform::getLocalTime(LocalTime &lt)
 U32 Platform::getTime()
 {
    // TODO
-   return SDL_GetTicks() / 1000;
+   return (U32)(SDL_GetTicks() / 1000);
 }
 
 /// Gets the time in milliseconds since some epoch. In this case, system start time.
 /// Storing milisec in a U32 overflows every 49.71 days
 U32 Platform::getRealMilliseconds()
 {
-   return SDL_GetTicks();
+   return (U32)SDL_GetTicks();
 }   
 
 U32 Platform::getVirtualMilliseconds()

@@ -30,8 +30,9 @@
 #include "game/gameInterface.h"
 #include "console/console.h"
 #include "platformEmscripten/EmscriptenInputManager.h"
+#include "platform/platformInput_ScriptBinding.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #ifdef LOG_INPUT
 #include <time.h>
@@ -80,29 +81,6 @@ void Input::init()
 
    Con::printf("   Input initialized");
    Con::printf(" ");
-}
-
-//------------------------------------------------------------------------------
-ConsoleFunction( isJoystickDetected, bool, 1, 1, "isJoystickDetected()" )
-{
-   (void)argc;
-   (void)argv;
-   UInputManager* manager = dynamic_cast<UInputManager*>(Input::getManager());
-   if (manager)
-      return manager->joystickDetected();
-   else
-      return false;
-}
-
-//------------------------------------------------------------------------------
-ConsoleFunction( getJoystickAxes, const char*, 2, 2, "getJoystickAxes( instance )" )
-{
-   (void)argc;
-   UInputManager* manager = dynamic_cast<UInputManager*>(Input::getManager());
-   if (manager)
-      return manager->getJoystickAxesString(dAtoi(argv[1]));
-   else
-      return "";
 }
 
 //------------------------------------------------------------------------------
@@ -242,7 +220,10 @@ void Input::refreshCursor()
 // did nothing, and the browser's pointer showed on top of the canvas's.
 void Input::setCursorState(bool on)
 {
-   SDL_ShowCursor(on ? SDL_ENABLE : SDL_DISABLE);
+   if (on)
+      SDL_ShowCursor();
+   else
+      SDL_HideCursor();
 }
 
 #pragma mark ---- DoubleClick Functions ----

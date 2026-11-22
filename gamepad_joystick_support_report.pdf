@@ -1,0 +1,321 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [ 6 0 R 8 0 R 10 0 R 12 0 R ] /Count 4 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 6191 >>
+stream
+BT /F2 13.2 Tf 50.0 742.0 Td (Torque 2D - Gamepad & Joystick Support Report \(SDL Gamepad API Audit\)) Tj ET
+0.20 g BT /F1 9.2 Tf 50.0 722.0 Td (Generated: 2026-11-22) Tj ET 0 g
+0.20 g BT /F1 9.2 Tf 50.0 709.8 Td (Repository: C:\\Users\\lkarh\\Downloads\\Torque2D-GL46) Tj ET 0 g
+0.20 g BT /F1 9.2 Tf 50.0 697.6 Td (Branch: main @ df7b225) Tj ET 0 g
+0.65 0.65 0.65 RG 0.70 w 50.0 675.9 m 562.0 675.9 l S
+BT /F2 11.2 Tf 50.0 661.4 Td (1. EXECUTIVE SUMMARY) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 654.9 m 562.0 654.9 l S
+BT /F2 9.2 Tf 50.0 633.4 Td (- Does the engine support gamepads and joysticks?) Tj ET
+BT /F1 9.1 Tf 57.6 621.0 Td (Partially, with major platform-by-platform differences:) Tj ET
+BT /F1 9.1 Tf 57.6 608.8 Td (* Windows supports both standard Xbox-style gamepads \(XInput\) and generic) Tj ET
+BT /F1 9.1 Tf 65.2 596.6 Td (joysticks/gamepads \(DirectInput 8\), including vibration/rumble.) Tj ET
+BT /F1 9.1 Tf 57.6 584.4 Td (* Linux supports raw joysticks only \(no standard gamepad layout mapping, no) Tj ET
+BT /F1 9.1 Tf 65.2 572.2 Td (hot-plugging, no rumble\).) Tj ET
+BT /F1 9.1 Tf 57.6 560.0 Td (* Web \(Emscripten\) shares Linux's startup-only raw joystick polling code,) Tj ET
+BT /F1 9.1 Tf 65.2 547.8 Td (which misses browser gamepads activated after page load.) Tj ET
+BT /F1 9.1 Tf 57.6 535.6 Td (* macOS, iOS, and Android have no joystick or gamepad support.) Tj ET
+BT /F2 9.2 Tf 50.0 517.9 Td (- Does the engine use SDL's Gamepad / GameController API?) Tj ET
+BT /F1 9.1 Tf 57.6 505.5 Td (No. There are zero references to SDL_GameController*, SDL_Gamepad*,) Tj ET
+BT /F1 9.1 Tf 57.6 493.3 Td (SDL_INIT_GAMECONTROLLER, or SDL_INIT_GAMEPAD anywhere in engine/source/.) Tj ET
+BT /F1 9.1 Tf 57.6 481.1 Td (* First, SDL 2 \(2.32.10\) is only built and linked on Linux \(vendored static) Tj ET
+BT /F1 9.1 Tf 65.2 468.9 Td (library in engine/lib/sdl\) and Web/Emscripten \(-sUSE_SDL=2\). Windows,) Tj ET
+BT /F1 9.1 Tf 65.2 456.7 Td (macOS, iOS, and Android do not use SDL at all.) Tj ET
+BT /F1 9.1 Tf 57.6 444.5 Td (* Second, the shared engine/source/platformSDL/ layer \(sdlInput.cpp,) Tj ET
+BT /F1 9.1 Tf 65.2 432.3 Td (sdlTextInput.cpp, sdlMsgBox.cpp\) only handles keyboard scancode mapping,) Tj ET
+BT /F1 9.1 Tf 65.2 420.1 Td (layout-aware Input::getAscii\(\)/getKeyCode\(\), text input, clipboard, and) Tj ET
+BT /F1 9.1 Tf 65.2 407.9 Td (message boxes.) Tj ET
+BT /F1 9.1 Tf 57.6 395.7 Td (* Third, the Linux and Emscripten input managers use only SDL 2's older,) Tj ET
+BT /F1 9.1 Tf 65.2 383.5 Td (low-level Joystick API \(SDL_INIT_JOYSTICK, SDL_NumJoysticks,) Tj ET
+BT /F1 9.1 Tf 65.2 371.3 Td (SDL_JoystickOpen, SDL_JoystickUpdate, SDL_JoystickGetAxis/Button/Hat\).) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 349.6 m 562.0 349.6 l S
+BT /F2 11.2 Tf 50.0 335.1 Td (2. PLATFORM SUPPORT MATRIX) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 328.6 m 562.0 328.6 l S
+0.92 g 50.0 293.6 512.0 16.5 re f 0 g
+0.45 0.45 0.45 RG 0.80 w 50.0 310.1 m 562.0 310.1 l S
+BT /F2 8.6 Tf 54.0 298.1 Td (Platform) Tj ET
+BT /F2 8.6 Tf 152.0 298.1 Td (Joysticks) Tj ET
+BT /F2 8.6 Tf 220.0 298.1 Td (Gamepad API) Tj ET
+BT /F2 8.6 Tf 296.0 298.1 Td (Rumble) Tj ET
+BT /F2 8.6 Tf 342.0 298.1 Td (Hot-Plug) Tj ET
+BT /F2 8.6 Tf 398.0 298.1 Td (Backend) Tj ET
+0.45 0.45 0.45 RG 0.80 w 50.0 293.6 m 562.0 293.6 l S
+BT /F2 8.5 Tf 54.0 281.6 Td (Windows) Tj ET
+BT /F1 8.5 Tf 152.0 281.6 Td (Yes) Tj ET
+BT /F1 8.5 Tf 220.0 281.6 Td (Yes \(XInput\)) Tj ET
+BT /F1 8.5 Tf 296.0 281.6 Td (Yes) Tj ET
+BT /F1 8.5 Tf 342.0 281.6 Td (XInput*) Tj ET
+BT /F1 8.5 Tf 398.0 281.6 Td (DirectInput 8 + XInput) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 277.1 m 562.0 277.1 l S
+0.97 g 50.0 260.6 512.0 16.5 re f 0 g
+BT /F2 8.5 Tf 54.0 265.1 Td (Linux) Tj ET
+BT /F1 8.5 Tf 152.0 265.1 Td (Yes \(raw\)) Tj ET
+BT /F1 8.5 Tf 220.0 265.1 Td (No \(raw joy\)) Tj ET
+BT /F1 8.5 Tf 296.0 265.1 Td (No) Tj ET
+BT /F1 8.5 Tf 342.0 265.1 Td (No) Tj ET
+BT /F1 8.5 Tf 398.0 265.1 Td (SDL 2 Joystick API) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 260.6 m 562.0 260.6 l S
+BT /F2 8.5 Tf 54.0 248.6 Td (Web \(Emscripten\)) Tj ET
+BT /F1 8.5 Tf 152.0 248.6 Td (Limited**) Tj ET
+BT /F1 8.5 Tf 220.0 248.6 Td (No \(raw joy\)) Tj ET
+BT /F1 8.5 Tf 296.0 248.6 Td (No) Tj ET
+BT /F1 8.5 Tf 342.0 248.6 Td (No) Tj ET
+BT /F1 8.5 Tf 398.0 248.6 Td (SDL 2 Joystick API) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 244.1 m 562.0 244.1 l S
+0.97 g 50.0 227.6 512.0 16.5 re f 0 g
+BT /F2 8.5 Tf 54.0 232.1 Td (macOS) Tj ET
+BT /F1 8.5 Tf 152.0 232.1 Td (No) Tj ET
+BT /F1 8.5 Tf 220.0 232.1 Td (No) Tj ET
+BT /F1 8.5 Tf 296.0 232.1 Td (No) Tj ET
+BT /F1 8.5 Tf 342.0 232.1 Td (No) Tj ET
+BT /F1 8.5 Tf 398.0 232.1 Td (Native Cocoa \(stubs\)) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 227.6 m 562.0 227.6 l S
+BT /F2 8.5 Tf 54.0 215.6 Td (iOS) Tj ET
+BT /F1 8.5 Tf 152.0 215.6 Td (No) Tj ET
+BT /F1 8.5 Tf 220.0 215.6 Td (No) Tj ET
+BT /F1 8.5 Tf 296.0 215.6 Td (No) Tj ET
+BT /F1 8.5 Tf 342.0 215.6 Td (No) Tj ET
+BT /F1 8.5 Tf 398.0 215.6 Td (UIKit \(touch/motion\)) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 211.1 m 562.0 211.1 l S
+0.97 g 50.0 194.6 512.0 16.5 re f 0 g
+BT /F2 8.5 Tf 54.0 199.1 Td (Android) Tj ET
+BT /F1 8.5 Tf 152.0 199.1 Td (No) Tj ET
+BT /F1 8.5 Tf 220.0 199.1 Td (No) Tj ET
+BT /F1 8.5 Tf 296.0 199.1 Td (No) Tj ET
+BT /F1 8.5 Tf 342.0 199.1 Td (No) Tj ET
+BT /F1 8.5 Tf 398.0 199.1 Td (NativeActivity \(touch/key\)) Tj ET
+0.82 0.82 0.82 RG 0.50 w 50.0 194.6 m 562.0 194.6 l S
+BT /F2 9.2 Tf 50.0 178.1 Td (Notes:) Tj ET
+BT /F1 9.1 Tf 50.0 165.6 Td (* Windows XInput polls controller slots 0..3 dynamically \(throttled to every) Tj ET
+BT /F1 9.1 Tf 57.6 153.4 Td (250 ms for disconnected slots\) and emits connect/disconnect events; DirectInput) Tj ET
+BT /F1 9.1 Tf 57.6 141.2 Td (devices are enumerated once in DInputManager::enable\(\).) Tj ET
+BT /F1 9.1 Tf 50.0 129.0 Td (** Browsers only expose gamepads to a page after a user presses a button on the) Tj ET
+BT /F1 9.1 Tf 61.4 116.8 Td (controller; because EmscriptenInputManager only calls SDL_NumJoysticks\(\) once) Tj ET
+BT /F1 9.1 Tf 61.4 104.6 Td (during startup, controllers woken after load are not detected unless input is) Tj ET
+BT /F1 9.1 Tf 61.4 92.4 Td (re-enabled.) Tj ET
+0.45 g BT /F1 8.0 Tf 515.8 32.0 Td (Page 1 of 4) Tj ET 0 g
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 5169 >>
+stream
+0.65 0.65 0.65 RG 0.70 w 50.0 746.0 m 562.0 746.0 l S
+BT /F2 11.2 Tf 50.0 731.5 Td (3. PLATFORM-BY-PLATFORM IMPLEMENTATION DETAILS) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 725.0 m 562.0 725.0 l S
+BT /F2 10.0 Tf 50.0 699.5 Td (A. Windows \(platformWin32\) - DirectInput 8 + XInput \(No SDL\)) Tj ET
+BT /F2 9.2 Tf 50.0 686.0 Td (- Primary Files:) Tj ET
+BT /F1 9.1 Tf 57.6 673.6 Td (* engine/source/platformWin32/winDirectInput.cc & winDirectInput.h) Tj ET
+BT /F1 9.1 Tf 57.6 661.4 Td (* engine/source/platformWin32/winDInputDevice.cc & winDInputDevice.h) Tj ET
+BT /F1 9.1 Tf 57.6 649.2 Td (* engine/source/platformWin32/winInput.cc & winInput_ScriptBinding.h) Tj ET
+BT /F1 9.1 Tf 57.6 637.0 Td (* engine/source/platform/platformInput_ScriptBinding.h) Tj ET
+BT /F2 9.2 Tf 50.0 624.8 Td (- XInput Gamepad Support:) Tj ET
+BT /F1 9.1 Tf 57.6 612.4 Td (* Dynamically loads xinput9_1_0.dll \(XInputGetState / XInputSetState\) in) Tj ET
+BT /F1 9.1 Tf 65.2 600.2 Td (DInputManager::enable\(\) for up to 4 controllers \(slots 0..3\).) Tj ET
+BT /F1 9.1 Tf 57.6 588.0 Td (* Emits InputEvent messages with deviceType = GamepadDeviceType) Tj ET
+BT /F1 9.1 Tf 65.2 575.8 Td (\("gamepad0".."gamepad3"\) and standard Xbox-style control identifiers:) Tj ET
+BT /F1 9.1 Tf 65.2 563.6 Td (- Analog sticks: thumblx, thumbly, thumbrx, thumbry \(with XINPUT_DEADZONE\)) Tj ET
+BT /F1 9.1 Tf 65.2 551.4 Td (- Analog triggers: triggerl, triggerr) Tj ET
+BT /F1 9.1 Tf 65.2 539.2 Td (- D-pad: dpadu, dpadd, dpadl, dpadr) Tj ET
+BT /F1 9.1 Tf 65.2 527.0 Td (- Buttons: btn_a, btn_b, btn_x, btn_y, btn_l, btn_r, btn_lt, btn_rt,) Tj ET
+BT /F1 9.1 Tf 72.8 514.8 Td (btn_start, btn_back) Tj ET
+BT /F1 9.1 Tf 65.2 502.6 Td (- Connection state: connect \(XI_MAKE / XI_BREAK\)) Tj ET
+BT /F1 9.1 Tf 57.6 490.4 Td (* Exposes dual-motor vibration via rumble\(device, xRumble, yRumble\) and) Tj ET
+BT /F1 9.1 Tf 65.2 478.2 Td (TorqueScript helpers enableXInput\(\), disableXInput\(\), resetXInput\(\),) Tj ET
+BT /F1 9.1 Tf 65.2 466.0 Td (isXInputConnected\(id\), and getXInputState\(id, property, current\).) Tj ET
+BT /F2 9.2 Tf 50.0 453.8 Td (- DirectInput 8 Joystick & Gamepad Support:) Tj ET
+BT /F1 9.1 Tf 57.6 441.4 Td (* Dynamically loads DInput8.dll \(DirectInput8Create\) and enumerates) Tj ET
+BT /F1 9.1 Tf 65.2 429.2 Td (DI8DEVTYPE_JOYSTICK and DI8DEVTYPE_GAMEPAD in DInputManager::enumerateDevices\(\).) Tj ET
+BT /F1 9.1 Tf 57.6 417.0 Td (* Both device classes are instantiated as JoystickDeviceType \("joystick0",) Tj ET
+BT /F1 9.1 Tf 65.2 404.8 Td ("joystick1", ...\) in DInputDevice::DInputDevice\(\), emitting generic) Tj ET
+BT /F1 9.1 Tf 65.2 392.6 Td (button0..button31, axes \(xaxis, yaxis, zaxis, rxaxis, ryaxis, rzaxis,) Tj ET
+BT /F1 9.1 Tf 65.2 380.4 Td (slider\), POV hats \(xpov..rpov, xpov2..rpov2\), and DirectInput rumble.) Tj ET
+BT /F1 9.1 Tf 57.6 368.2 Td (* Exposes script functions enableJoystick\(\), disableJoystick\(\),) Tj ET
+BT /F1 9.1 Tf 65.2 356.0 Td (isJoystickDetected\(\), getJoystickAxes\(instance\), and getJoystickCount\(\).) Tj ET
+BT /F2 9.2 Tf 50.0 343.8 Td (- Important Caveats:) Tj ET
+BT /F1 9.1 Tf 57.6 331.4 Td (* Input::activate\(\) in winInput.cc returns early unless $enableDirectInput is) Tj ET
+BT /F1 9.1 Tf 65.2 319.2 Td (truthy. Because Input::process\(\) only calls DInputManager::process\(\) while) Tj ET
+BT /F1 9.1 Tf 65.2 307.0 Td (Input::smActive is true, scripts must enable/activate DirectInput for both) Tj ET
+BT /F1 9.1 Tf 65.2 294.8 Td (DirectInput and XInput polling to run.) Tj ET
+BT /F1 9.1 Tf 57.6 282.6 Td (* Named XInput ActionMap tokens \(thumblx, btn_a, triggerl, etc.\) in) Tj ET
+BT /F1 9.1 Tf 65.2 270.4 Td (engine/source/input/actionMap.cc \(lines 2105-2143\) are compiled only when) Tj ET
+BT /F1 9.1 Tf 65.2 258.2 Td (TORQUE_OS_WIN or TORQUE_OS_XENON is defined.) Tj ET
+BT /F2 10.0 Tf 50.0 236.5 Td (B. Linux \(platformX86UNIX + platformSDL\) - SDL 2 Joystick API Only) Tj ET
+BT /F2 9.2 Tf 50.0 223.0 Td (- Primary Files:) Tj ET
+BT /F1 9.1 Tf 57.6 210.6 Td (* engine/source/platformX86UNIX/x86UNIXInputManager.cc & .h) Tj ET
+BT /F1 9.1 Tf 57.6 198.4 Td (* engine/source/platformX86UNIX/x86UNIXInput.cc & x86UNIXInput_ScriptBinding.h) Tj ET
+BT /F1 9.1 Tf 57.6 186.2 Td (* engine/source/platformX86UNIX/x86UNIXWindow.cc) Tj ET
+BT /F1 9.1 Tf 57.6 174.0 Td (* engine/source/platformSDL/sdlInput.cpp & sdlInput.h) Tj ET
+BT /F1 9.1 Tf 57.6 161.8 Td (* CMakeLists.txt & engine/lib/CMakeLists.txt) Tj ET
+BT /F2 9.2 Tf 50.0 149.6 Td (- Build & SDL Configuration:) Tj ET
+BT /F1 9.1 Tf 57.6 137.2 Td (* Links vendored static SDL 2.32.10 \(SDL2::SDL2-static\) and defines TORQUE_SDL.) Tj ET
+BT /F1 9.1 Tf 57.6 125.0 Td (* Runs on SDL 2's X11 driver \(SDL_HINT_VIDEODRIVER = "x11"\).) Tj ET
+BT /F2 9.2 Tf 50.0 112.8 Td (- Joystick Implementation:) Tj ET
+BT /F1 9.1 Tf 57.6 100.4 Td (* UInputManager::initJoystick\(\) calls SDL_InitSubSystem\(SDL_INIT_JOYSTICK\),) Tj ET
+BT /F1 9.1 Tf 65.2 88.2 Td (disables SDL joystick event delivery via SDL_JoystickEventState\(SDL_IGNORE\),) Tj ET
+BT /F1 9.1 Tf 65.2 76.0 Td (and enumerates SDL_NumJoysticks\(\) once during UInputManager::enable\(\).) Tj ET
+0.45 g BT /F1 8.0 Tf 515.8 32.0 Td (Page 2 of 4) Tj ET 0 g
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 5137 >>
+stream
+BT /F1 9.1 Tf 57.6 742.0 Td (* Creates JoystickInputDevice objects named "joystick0", "joystick1", ...) Tj ET
+BT /F1 9.1 Tf 65.2 729.8 Td (\(JoystickDeviceType\).) Tj ET
+BT /F1 9.1 Tf 57.6 717.6 Td (* UInputManager::process\(\) calls SDL_JoystickUpdate\(\) each frame and polls) Tj ET
+BT /F1 9.1 Tf 65.2 705.4 Td (SDL_JoystickGetAxis\(\), SDL_JoystickGetButton\(\), and SDL_JoystickGetHat\(\).) Tj ET
+BT /F1 9.1 Tf 57.6 693.2 Td (* Axes default in order to SI_XAXIS, SI_YAXIS, SI_ZAXIS, SI_RXAXIS, SI_RYAXIS,) Tj ET
+BT /F1 9.1 Tf 65.2 681.0 Td (SI_RZAXIS, SI_SLIDER and can be manually overridden via console preferences:) Tj ET
+BT /F1 9.1 Tf 65.2 668.8 Td ($Pref::Input::Joystick<N>::Axis<M> = "TorqueAxisName MinValue MaxValue".) Tj ET
+BT /F2 9.2 Tf 50.0 656.6 Td (- Missing Modern Gamepad Features:) Tj ET
+BT /F1 9.1 Tf 57.6 644.2 Td (* No SDL_GameController API usage \(no standardized ABXY/trigger/stick mapping) Tj ET
+BT /F1 9.1 Tf 65.2 632.0 Td (from SDL's gamecontrollerdb; raw button/axis indices vary by controller\).) Tj ET
+BT /F1 9.1 Tf 57.6 619.8 Td (* No GamepadDeviceType \("gamepad0"\) events or rumble/haptics support.) Tj ET
+BT /F1 9.1 Tf 57.6 607.6 Td (* No hot-plugging: x86UNIXWindow.cc only forwards keyboard, text, and mouse) Tj ET
+BT /F1 9.1 Tf 65.2 595.4 Td (events from SDL_PollEvent\(\) and ignores SDL_JOYDEVICEADDED / REMOVED.) Tj ET
+BT /F2 10.0 Tf 50.0 573.7 Td (C. Web / Emscripten \(platformEmscripten + platformSDL\) - SDL 2 Joystick API) Tj ET
+BT /F2 9.2 Tf 50.0 560.2 Td (- Primary Files:) Tj ET
+BT /F1 9.1 Tf 57.6 547.8 Td (* engine/source/platformEmscripten/EmscriptenInputManager.cpp & .h) Tj ET
+BT /F1 9.1 Tf 57.6 535.6 Td (* engine/source/platformEmscripten/EmscriptenInput.cpp) Tj ET
+BT /F1 9.1 Tf 57.6 523.4 Td (* engine/source/platformEmscripten/EmscriptenWindow.cpp) Tj ET
+BT /F1 9.1 Tf 57.6 511.2 Td (* CMakeLists.txt) Tj ET
+BT /F2 9.2 Tf 50.0 499.0 Td (- Implementation & Limitations:) Tj ET
+BT /F1 9.1 Tf 57.6 486.6 Td (* Uses Emscripten's SDL 2.32.10 port \(-sUSE_SDL=2\) with TORQUE_SDL defined.) Tj ET
+BT /F1 9.1 Tf 57.6 474.4 Td (* EmscriptenInputManager.cpp is a direct port of Linux's UInputManager using) Tj ET
+BT /F1 9.1 Tf 65.2 462.2 Td (the same SDL_INIT_JOYSTICK + SDL_JoystickEventState\(SDL_IGNORE\) + per-frame) Tj ET
+BT /F1 9.1 Tf 65.2 450.0 Td (SDL_JoystickUpdate\(\) polling path.) Tj ET
+BT /F1 9.1 Tf 57.6 437.8 Td (* Practical Browser Limitation: EmscriptenInputManager.cpp \(lines 114-116\)) Tj ET
+BT /F1 9.1 Tf 65.2 425.6 Td (explicitly comments that a browser only exposes a gamepad to a page once a) Tj ET
+BT /F1 9.1 Tf 65.2 413.4 Td (button on it has been pressed, so SDL_NumJoysticks\(\) usually returns 0 at) Tj ET
+BT /F1 9.1 Tf 65.2 401.2 Td (initialization time. Because EmscriptenWindow.cpp does not listen for) Tj ET
+BT /F1 9.1 Tf 65.2 389.0 Td (SDL_JOYDEVICEADDED/REMOVED and initJoystick\(\) is never re-invoked on device) Tj ET
+BT /F1 9.1 Tf 65.2 376.8 Td (connection, gamepads activated after boot are not picked up automatically.) Tj ET
+BT /F2 10.0 Tf 50.0 355.1 Td (D. macOS \(platformOSX\) - Not Supported) Tj ET
+BT /F2 9.2 Tf 50.0 341.6 Td (- Primary Files:) Tj ET
+BT /F1 9.1 Tf 57.6 329.2 Td (* engine/source/platformOSX/osxInput.mm) Tj ET
+BT /F1 9.1 Tf 57.6 317.0 Td (* engine/source/platformOSX/osxInputManager.mm & .h) Tj ET
+BT /F1 9.1 Tf 57.6 304.8 Td (* engine/source/platformOSX/osxTorqueView.mm) Tj ET
+BT /F2 9.2 Tf 50.0 292.6 Td (- Implementation State:) Tj ET
+BT /F1 9.1 Tf 57.6 280.2 Td (* Uses a native Objective-C++ / Cocoa back-end; does not use SDL.) Tj ET
+BT /F1 9.1 Tf 57.6 268.0 Td (* Input::enableJoystick\(\) unconditionally returns false and) Tj ET
+BT /F1 9.1 Tf 65.2 255.8 Td (Input::disableJoystick\(\) is an empty stub \(osxInput.mm lines 255-264\).) Tj ET
+BT /F1 9.1 Tf 57.6 243.6 Td (* osxInputManager and osxTorqueView only handle keyboard and mouse events;) Tj ET
+BT /F1 9.1 Tf 65.2 231.4 Td (there is no GameController.framework or IOKit HID integration.) Tj ET
+BT /F2 10.0 Tf 50.0 209.7 Td (E. iOS \(platformiOS\) & Android \(platformAndroid\) - Not Supported) Tj ET
+BT /F2 9.2 Tf 50.0 196.2 Td (- Primary Files:) Tj ET
+BT /F1 9.1 Tf 57.6 183.8 Td (* engine/source/platformiOS/iOSInput.mm & iOSEvents.mm) Tj ET
+BT /F1 9.1 Tf 57.6 171.6 Td (* engine/source/platformAndroid/AndroidInput.cpp & T2DActivity.cpp) Tj ET
+BT /F2 9.2 Tf 50.0 159.4 Td (- Implementation State:) Tj ET
+BT /F1 9.1 Tf 57.6 147.0 Td (* Both platforms stub isJoystickDetected\(\) to return false and) Tj ET
+BT /F1 9.1 Tf 65.2 134.8 Td (getJoystickAxes\(\) to return "" \(iOSInput.mm lines 231-245; AndroidInput.cpp) Tj ET
+BT /F1 9.1 Tf 65.2 122.6 Td (lines 209-223\).) Tj ET
+BT /F1 9.1 Tf 57.6 110.4 Td (* iOS does not link or use GameController.framework \(GCController\); the only) Tj ET
+BT /F1 9.1 Tf 65.2 98.2 Td (JoystickDeviceType reference in platformiOS is commented-out legacy) Tj ET
+BT /F1 9.1 Tf 65.2 86.0 Td (accelerometer code \(iOSInput.mm lines 1161-1184\).) Tj ET
+BT /F1 9.1 Tf 57.6 73.8 Td (* Android's engine_handle_input\(\) in T2DActivity.cpp \(lines 472-657\) handles) Tj ET
+0.45 g BT /F1 8.0 Tf 515.8 32.0 Td (Page 3 of 4) Tj ET 0 g
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents 13 0 R >>
+endobj
+13 0 obj
+<< /Length 4288 >>
+stream
+BT /F1 9.1 Tf 65.2 742.0 Td (only touch motion \(AINPUT_EVENT_TYPE_MOTION -> touch slots\) and basic) Tj ET
+BT /F1 9.1 Tf 65.2 729.8 Td (keyboard/volume/back keys \(AINPUT_EVENT_TYPE_KEY\), with no joystick axis or) Tj ET
+BT /F1 9.1 Tf 65.2 717.6 Td (gamepad button \(AKEYCODE_BUTTON_*\) handling.) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 695.9 m 562.0 695.9 l S
+BT /F2 11.2 Tf 50.0 681.4 Td (4. CROSS-PLATFORM INPUT & ACTIONMAP ARCHITECTURE) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 674.9 m 562.0 674.9 l S
+BT /F2 9.2 Tf 50.0 653.4 Td (- Event Model \(engine/source/platform/event.h\):) Tj ET
+BT /F1 9.1 Tf 57.6 641.0 Td (* Defines InputDeviceTypes including JoystickDeviceType, GamepadDeviceType,) Tj ET
+BT /F1 9.1 Tf 65.2 628.8 Td (and XInputDeviceType.) Tj ET
+BT /F1 9.1 Tf 57.6 616.6 Td (* Defines generic button codes \(KEY_BUTTON0..KEY_BUTTON31\), joystick axis and) Tj ET
+BT /F1 9.1 Tf 65.2 604.4 Td (POV codes \(SI_XAXIS..SI_SLIDER, SI_XPOV..SI_RPOV2\), and XInput-specific) Tj ET
+BT /F1 9.1 Tf 65.2 592.2 Td (codes \(XI_CONNECT, XI_THUMBLX..XI_RIGHT_TRIGGER, XI_START..XI_Y\).) Tj ET
+BT /F2 9.2 Tf 50.0 580.0 Td (- ActionMap Dispatch \(engine/source/input/actionMap.cc\):) Tj ET
+BT /F1 9.1 Tf 57.6 567.6 Td (* ActionMap::getDeviceTypeAndInstance\(\) parses both "joystick<N>") Tj ET
+BT /F1 9.1 Tf 65.2 555.4 Td (\(JoystickDeviceType\) and "gamepad<N>" \(GamepadDeviceType\) on all platforms.) Tj ET
+BT /F1 9.1 Tf 57.6 543.2 Td (* ActionMap::processMove\(\) supports inversion, scaling, dead zones, and) Tj ET
+BT /F1 9.1 Tf 65.2 531.0 Td (non-linear curves for both JoystickDeviceType and GamepadDeviceType.) Tj ET
+BT /F1 9.1 Tf 57.6 518.8 Td (* However, the gVirtualMap[] table entries for named gamepad inputs) Tj ET
+BT /F1 9.1 Tf 65.2 506.6 Td (\("thumblx", "triggerl", "btn_a", "dpadu", etc.\) are wrapped in) Tj ET
+BT /F1 9.1 Tf 65.2 494.4 Td (#if defined\(TORQUE_OS_WIN\) || defined\(TORQUE_OS_XENON\) \(lines 2105-2143\), so) Tj ET
+BT /F1 9.1 Tf 65.2 482.2 Td (non-Windows platforms cannot bind those symbolic names even if a cross-) Tj ET
+BT /F1 9.1 Tf 65.2 470.0 Td (platform gamepad back-end were added without lifting that preprocessor guard.) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 448.3 m 562.0 448.3 l S
+BT /F2 11.2 Tf 50.0 433.8 Td (5. AUDIT VERIFICATION & KEY REFERENCES) Tj ET
+0.65 0.65 0.65 RG 0.70 w 50.0 427.3 m 562.0 427.3 l S
+BT /F2 9.2 Tf 50.0 405.8 Td (- Static Codebase Search \(git grep across engine/source/\):) Tj ET
+BT /F1 9.1 Tf 57.6 393.4 Td (* Searched for: GameController, SDL_Gamepad, SDL_CONTROLLER,) Tj ET
+BT /F1 9.1 Tf 65.2 381.2 Td (SDL_INIT_GAMECONTROLLER, SDL_INIT_GAMEPAD, SDL_JOYDEVICE, GCController,) Tj ET
+BT /F1 9.1 Tf 65.2 369.0 Td (IOHID, AINPUT_SOURCE_JOYSTICK, AINPUT_SOURCE_GAMEPAD, AKEYCODE_BUTTON.) Tj ET
+BT /F1 9.1 Tf 57.6 356.8 Td (* Result: 0 matches in engine/source/.) Tj ET
+BT /F2 9.2 Tf 50.0 344.6 Td (- Key Files Audited:) Tj ET
+BT /F1 9.1 Tf 57.6 332.2 Td (* CMakeLists.txt, cmake/PlatformSources.cmake, engine/lib/CMakeLists.txt,) Tj ET
+BT /F1 9.1 Tf 65.2 320.0 Td (engine/lib/sdl/README-TORQUE2D.md) Tj ET
+BT /F1 9.1 Tf 57.6 307.8 Td (* engine/source/platform/event.h, platformInput.h,) Tj ET
+BT /F1 9.1 Tf 65.2 295.6 Td (platformInput_ScriptBinding.h) Tj ET
+BT /F1 9.1 Tf 57.6 283.4 Td (* engine/source/input/actionMap.cc) Tj ET
+BT /F1 9.1 Tf 57.6 271.2 Td (* engine/source/platformSDL/sdlInput.h & sdlInput.cpp) Tj ET
+BT /F1 9.1 Tf 57.6 259.0 Td (* engine/source/platformWin32/winInput.cc, winDirectInput.cc,) Tj ET
+BT /F1 9.1 Tf 65.2 246.8 Td (winDInputDevice.cc, winInput_ScriptBinding.h, winWindow.cc) Tj ET
+BT /F1 9.1 Tf 57.6 234.6 Td (* engine/source/platformX86UNIX/x86UNIXInput.cc, x86UNIXInputManager.cc,) Tj ET
+BT /F1 9.1 Tf 65.2 222.4 Td (x86UNIXInput_ScriptBinding.h, x86UNIXWindow.cc) Tj ET
+BT /F1 9.1 Tf 57.6 210.2 Td (* engine/source/platformEmscripten/EmscriptenInput.cpp,) Tj ET
+BT /F1 9.1 Tf 65.2 198.0 Td (EmscriptenInputManager.cpp, EmscriptenWindow.cpp) Tj ET
+BT /F1 9.1 Tf 57.6 185.8 Td (* engine/source/platformOSX/osxInput.mm, osxInputManager.mm, osxEvents.mm) Tj ET
+BT /F1 9.1 Tf 57.6 173.6 Td (* engine/source/platformiOS/iOSInput.mm) Tj ET
+BT /F1 9.1 Tf 57.6 161.4 Td (* engine/source/platformAndroid/AndroidInput.cpp, T2DActivity.cpp) Tj ET
+0.45 g BT /F1 8.0 Tf 515.8 32.0 Td (Page 4 of 4) Tj ET 0 g
+endstream
+endobj
+xref
+0 14
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000143 00000 n 
+0000000240 00000 n 
+0000000342 00000 n 
+0000000437 00000 n 
+0000000583 00000 n 
+0000006826 00000 n 
+0000006972 00000 n 
+0000012193 00000 n 
+0000012341 00000 n 
+0000017531 00000 n 
+0000017679 00000 n 
+trailer
+<< /Size 14 /Root 1 0 R >>
+startxref
+22020
+%%EOF

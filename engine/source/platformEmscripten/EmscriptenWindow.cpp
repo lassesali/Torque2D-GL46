@@ -42,13 +42,14 @@
 
 #ifndef DEDICATED
 #include "platformEmscripten/EmscriptenInputManager.h"
+#include "platformSDL/sdlGamepad.h"
 #include "platformSDL/sdlTextInput.h"
 #endif
 
 #include <stdlib.h>
 
 #ifndef DEDICATED
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 extern bool InitOpenGL();
 extern void Cleanup(bool minimal=false);
@@ -97,15 +98,8 @@ static void InitWindow(const Point2I &initialSize, const char *name)
 //------------------------------------------------------------------------------
 static bool InitSDL()
 {
-   if (SDL_Init(SDL_INIT_VIDEO) != 0)
+   if (!SDL_Init(SDL_INIT_VIDEO))
       return false;
-
-   // SDL starts with text input on. It stays off until a text field asks for
-   // it (platformSDL/sdlTextInput.h). While it is off, SDL's keyboard handler
-   // keeps the browser from acting on the keys the game reads; while it is
-   // on, it lets a typing key's keydown through to the browser, which is what
-   // makes the browser send the keypress SDL reads the character from.
-   SDL_StopTextInput();
 
    return true;
 }
@@ -141,39 +135,6 @@ static void SetAppState()
 }
 
 //------------------------------------------------------------------------------
-static void ProcessWindowEvent(const SDL_WindowEvent& event)
-{
-   switch (event.event)
-   {
-      case SDL_WINDOWEVENT_SIZE_CHANGED:
-         // The canvas changed size: the page resized it (only a page that
-         // sizes the canvas with CSS does), it went into or out of fullscreen,
-         // or setScreenMode resized it. SDL has already resized the drawing
-         // buffer, so following it is only a matter of telling the canvas.
-         OpenGLDevice::followWindow();
-         Game->refreshWindow();
-         break;
-
-      case SDL_WINDOWEVENT_EXPOSED:
-         Game->refreshWindow();
-         break;
-
-      case SDL_WINDOWEVENT_FOCUS_GAINED:
-      case SDL_WINDOWEVENT_FOCUS_LOST:
-         // The page gained or lost the keyboard. SDL 2 says so (the SDL 1.2
-         // port never sent SDL_ACTIVEEVENT), and on losing it has already let
-         // go of every key held down, whose releases follow.
-         SetAppState();
-         break;
-   }
-}
-
-//------------------------------------------------------------------------------
-// The event loop. SDL's queue is emptied here, once a frame and in one place:
-// window events are handled here and input goes to the input manager, as on
-// Linux. The SDL 1.2 back-end copied each frame's events into a list for the
-// input manager to walk later, which re-entered itself whenever handling one
-// reset the input.
 static bool ProcessMessages()
 {
    // Whatever the last frame's input asked of text input -- a text field
@@ -186,22 +147,40 @@ static bool ProcessMessages()
    SDL_Event event;
    while (SDL_PollEvent(&event))
    {
+      if (event.type >= SDL_EVENT_JOYSTICK_AXIS_MOTION &&
+          event.type <= SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED)
+      {
+         SDLGamepad::processEvent(event);
+         continue;
+      }
+
       switch (event.type)
       {
-         case SDL_QUIT:
+         case SDL_EVENT_QUIT:
             return false;
 
-         case SDL_WINDOWEVENT:
-            ProcessWindowEvent(event.window);
+         case SDL_EVENT_WINDOW_RESIZED:
+         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+            OpenGLDevice::followWindow();
+            Game->refreshWindow();
             break;
 
-         case SDL_KEYDOWN:
-         case SDL_KEYUP:
-         case SDL_TEXTINPUT:
-         case SDL_MOUSEMOTION:
-         case SDL_MOUSEBUTTONDOWN:
-         case SDL_MOUSEBUTTONUP:
-         case SDL_MOUSEWHEEL:
+         case SDL_EVENT_WINDOW_EXPOSED:
+            Game->refreshWindow();
+            break;
+
+         case SDL_EVENT_WINDOW_FOCUS_GAINED:
+         case SDL_EVENT_WINDOW_FOCUS_LOST:
+            SetAppState();
+            break;
+
+         case SDL_EVENT_KEY_DOWN:
+         case SDL_EVENT_KEY_UP:
+         case SDL_EVENT_TEXT_INPUT:
+         case SDL_EVENT_MOUSE_MOTION:
+         case SDL_EVENT_MOUSE_BUTTON_DOWN:
+         case SDL_EVENT_MOUSE_BUTTON_UP:
+         case SDL_EVENT_MOUSE_WHEEL:
             if (inputManager)
                inputManager->processEvent(event);
             break;
@@ -322,10 +301,12 @@ void Platform::init()
       }
       else
       {
-         SDL_version linked;
-         SDL_GetVersion(&linked);
+         const int linked = SDL_GetVersion();
          Con::printf("SDL %d.%d.%d initialized (video driver: %s)",
-            linked.major, linked.minor, linked.patch, SDL_GetCurrentVideoDriver());
+            SDL_VERSIONNUM_MAJOR(linked),
+            SDL_VERSIONNUM_MINOR(linked),
+            SDL_VERSIONNUM_MICRO(linked),
+            SDL_GetCurrentVideoDriver());
       }
 
       // initialize input
@@ -411,12 +392,14 @@ Resolution Video::getDesktopResolution()
    Resolution result( 0, 0, 32 );
 
 #ifndef DEDICATED
-   SDL_DisplayMode mode;
-   if ( SDL_WasInit( SDL_INIT_VIDEO ) && SDL_GetDesktopDisplayMode( 0, &mode ) == 0 )
+   const SDL_DisplayMode* mode = SDL_WasInit( SDL_INIT_VIDEO )
+      ? SDL_GetDesktopDisplayMode( SDL_GetPrimaryDisplay() )
+      : NULL;
+   if ( mode )
    {
-      result.w   = mode.w;
-      result.h   = mode.h;
-      result.bpp = SDL_BITSPERPIXEL( mode.format );
+      result.w   = mode->w;
+      result.h   = mode->h;
+      result.bpp = SDL_BITSPERPIXEL( mode->format );
    }
 #endif
 

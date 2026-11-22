@@ -27,7 +27,7 @@
 #include "string/unicode.h"
 #include "platformSDL/sdlTextInput.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 //------------------------------------------------------------------------------
 // Turning text input on and off
@@ -41,6 +41,24 @@
 // turning text input off throws away any text SDL is still holding.
 
 static SDLTextInput::KeyboardInputState sInputState = SDLTextInput::NONE;
+static SDL_Window* sTargetWindow = NULL;
+
+static SDL_Window* resolveTextInputWindow()
+{
+   if ( sTargetWindow )
+      return sTargetWindow;
+
+   SDL_Window* focus = SDL_GetKeyboardFocus();
+   if ( focus )
+      return focus;
+
+   return SDL_GL_GetCurrentWindow();
+}
+
+void SDLTextInput::setWindow( SDL_Window* window )
+{
+   sTargetWindow = window;
+}
 
 void SDLTextInput::updateSDLTextInputState( KeyboardInputState state )
 {
@@ -52,16 +70,20 @@ void SDLTextInput::processTextInputState()
    if ( sInputState == NONE )
       return;
 
+   SDL_Window* window = resolveTextInputWindow();
+   if ( window == NULL )
+      return;
+
    const bool wantText = ( sInputState == TEXT_INPUT );
    sInputState = NONE;
 
-   if ( wantText == ( SDL_IsTextInputActive() == SDL_TRUE ) )
+   if ( wantText == SDL_TextInputActive( window ) )
       return;
 
    if ( wantText )
-      SDL_StartTextInput();
+      SDL_StartTextInput( window );
    else
-      SDL_StopTextInput();
+      SDL_StopTextInput( window );
 }
 
 //------------------------------------------------------------------------------
@@ -71,8 +93,8 @@ void SDLTextInput::processTextInputState()
 // has the keyboard leaves a globally bound key to the map, and the key's text
 // is thrown away. By the time the key is read here SDL has queued its text
 // behind it; SDL_StopTextInput discards that (it flushes the queued
-// SDL_TEXTINPUT events). Text input is asked back for the next pump, and if
-// the binding took the keyboard away meanwhile -- a key that closes the
+// SDL_EVENT_TEXT_INPUT events). Text input is asked back for the next pump, and
+// if the binding took the keyboard away meanwhile -- a key that closes the
 // field's dialog -- the field's own request to turn it off comes later and
 // wins. GuiTextEditCtrl::onKeyDown leaves the same keys to the map, bar the
 // field's own editing keys, which type nothing anyway.
@@ -81,14 +103,15 @@ void SDLTextInput::withholdGlobalKeyText( const InputEvent& event )
    if ( event.action != SI_MAKE && event.action != SI_REPEAT )
       return;
 
-   if ( SDL_IsTextInputActive() != SDL_TRUE )
+   SDL_Window* window = resolveTextInputWindow();
+   if ( window == NULL || !SDL_TextInputActive( window ) )
       return;
 
    ActionMap* globalMap = ActionMap::getGlobalMap();
    if ( globalMap == NULL || !globalMap->isAction( event.deviceType, event.deviceInst, event.modifier, event.objInst ) )
       return;
 
-   SDL_StopTextInput();
+   SDL_StopTextInput( window );
    updateSDLTextInputState( TEXT_INPUT );
 }
 
@@ -199,10 +222,10 @@ void SDLTextInput::fillCharEvent( InputEvent& event, UTF16 unit, U8 action )
 //------------------------------------------------------------------------------
 void SDLTextInput::postText( const char* utf8 )
 {
-   // SDL_TEXTINPUT carries less than SDL_TEXTINPUTEVENT_TEXT_SIZE bytes, and
-   // no byte decodes to more than one code unit.
-   UTF16 units[SDL_TEXTINPUTEVENT_TEXT_SIZE];
-   const U32 count = decodeText( utf8, units, SDL_TEXTINPUTEVENT_TEXT_SIZE );
+   // Decode into fixed stack chunks; SDL3 event.text.text is heap/unbounded UTF-8.
+   const U32 kMaxTextUnits = 256;
+   UTF16 units[kMaxTextUnits];
+   const U32 count = decodeText( utf8, units, kMaxTextUnits );
 
    for ( U32 i = 0; i < count; ++i )
    {

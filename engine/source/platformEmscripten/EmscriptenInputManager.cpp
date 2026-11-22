@@ -30,11 +30,12 @@
 #include "platform/event.h"
 #include "game/gameInterface.h"
 #include "platformEmscripten/EmscriptenInputManager.h"
+#include "platformSDL/sdlGamepad.h"
 #include "platformSDL/sdlInput.h"
 #include "platformSDL/sdlTextInput.h"
 #include "math/mMathFn.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 //------------------------------------------------------------------------------
 // The modifier keys held right now, for an event that carries none of its own
@@ -52,8 +53,8 @@ UInputManager::UInputManager()
    mActive = false;
    mEnabled = false;
    mLocking = true; // locking enabled by default
-   mKeyboardEnabled = mMouseEnabled = mJoystickEnabled = false;
-   mKeyboardActive = mMouseActive = mJoystickActive = false;
+   mKeyboardEnabled = mMouseEnabled = false;
+   mKeyboardActive = mMouseActive = false;
    mLastMouseX = mLastMouseY = -1;
 }
 
@@ -64,8 +65,6 @@ void UInputManager::init()
       TypeBool, &mKeyboardEnabled );
    Con::addVariable( "pref::Input::MouseEnabled",
       TypeBool, &mMouseEnabled );
-   Con::addVariable( "pref::Input::JoystickEnabled",
-      TypeBool, &mJoystickEnabled );
 }
 
 //------------------------------------------------------------------------------
@@ -79,8 +78,7 @@ bool UInputManager::enable()
    dMemset( mMouseButtonState, 0, sizeof( mMouseButtonState ) );
    dMemset( mKeyboardState, 0, sizeof( mKeyboardState ) );
 
-   mJoystickEnabled = false;
-   initJoystick();
+   SDLGamepad::init();
 
    mEnabled = true;
    mMouseEnabled = true;
@@ -95,46 +93,9 @@ bool UInputManager::enable()
 void UInputManager::disable()
 {
    deactivate();
+   SDLGamepad::shutdown();
    mEnabled = false;
    return;
-}
-
-//------------------------------------------------------------------------------
-void UInputManager::initJoystick()
-{
-   mJoystickList.clear();
-
-   // initialize SDL joystick system
-   if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
-   {
-      Con::warnf("   Unable to initialize joystick: %s", SDL_GetError());
-      return;
-   }
-
-   // A browser shows a page a gamepad only once a button on it has been
-   // pressed, so at this point there are usually none.
-   int numJoysticks = SDL_NumJoysticks();
-   if (numJoysticks == 0)
-      Con::printf("   No joysticks found.");
-
-   // disable joystick events (use polling instead)
-   SDL_JoystickEventState(SDL_IGNORE);
-
-   // install joysticks
-   for(int i = 0; i < numJoysticks; i++ )
-   {
-      JoystickInputDevice* newDevice = new JoystickInputDevice(i);
-      addObject(newDevice);
-      mJoystickList.push_back(newDevice);
-      Con::printf("   %s: %s",
-         newDevice->getDeviceName(), newDevice->getName());
-#ifdef LOG_INPUT
-      Input::log("   %s: %s\n",
-         newDevice->getDeviceName(), newDevice->getName());
-#endif
-   }
-
-   mJoystickEnabled = true;
 }
 
 //------------------------------------------------------------------------------
@@ -230,17 +191,10 @@ void UInputManager::resetInputState()
 {
    resetKeyboardState();
    resetMouseState();
-
-   // reset joysticks
-   for (Vector<JoystickInputDevice*>::iterator iter = mJoystickList.begin();
-        iter != mJoystickList.end();
-        ++iter)
-   {
-      (*iter)->reset();
-   }
+   SDLGamepad::resetGamepadStates();
 
    // dispose of any lingering SDL keyboard, text and mouse events
-   SDL_FlushEvents(SDL_KEYDOWN, SDL_MOUSEWHEEL);
+   SDL_FlushEvents(SDL_EVENT_KEY_DOWN, SDL_EVENT_MOUSE_WHEEL);
 }
 
 //------------------------------------------------------------------------------
@@ -254,7 +208,7 @@ void UInputManager::setLocking(bool enabled)
 }
 
 //------------------------------------------------------------------------------
-// A locked mouse is SDL 2's relative mode, as on Linux, which on the web is
+// A locked mouse is SDL3's relative mode, as on Linux, which on the web is
 // the browser's pointer lock. The browser locks the pointer only in answer to
 // the player's click or key, so SDL asks now and the lock happens at the next
 // one.
@@ -262,22 +216,22 @@ void UInputManager::lockInput()
 {
    SDL_Window* window = gPlatState.sdlWindow;
    if (window && !gPlatState.backgrounded && gPlatState.mouseLocked &&
-      mLocking && !SDL_GetRelativeMouseMode())
+      mLocking && !SDL_GetWindowRelativeMouseMode(window))
    {
-      SDL_SetWindowGrab(window, SDL_TRUE);
-      SDL_SetRelativeMouseMode(SDL_TRUE);
+      SDL_SetWindowMouseGrab(window, true);
+      SDL_SetWindowRelativeMouseMode(window, true);
    }
 }
 
 //------------------------------------------------------------------------------
 void UInputManager::unlockInput()
 {
-   if (SDL_GetRelativeMouseMode())
-      SDL_SetRelativeMouseMode(SDL_FALSE);
-
    SDL_Window* window = gPlatState.sdlWindow;
-   if (window && SDL_GetWindowGrab(window))
-      SDL_SetWindowGrab(window, SDL_FALSE);
+   if (window && SDL_GetWindowRelativeMouseMode(window))
+      SDL_SetWindowRelativeMouseMode(window, false);
+
+   if (window && SDL_GetWindowMouseGrab(window))
+      SDL_SetWindowMouseGrab(window, false);
 }
 
 //------------------------------------------------------------------------------
@@ -341,8 +295,8 @@ void UInputManager::mouseMotionEvent(const SDL_Event& event)
       // In canvas pixels: SDL scales the browser's position on the page to
       // the canvas's size.
       MouseMoveEvent mmevent;
-      mmevent.xPos = mLastMouseX = event.motion.x;
-      mmevent.yPos = mLastMouseY = event.motion.y;
+      mmevent.xPos = mLastMouseX = (S32)event.motion.x;
+      mmevent.yPos = mLastMouseY = (S32)event.motion.y;
       mmevent.modifier = CurrentModifiers();
       Game->postEvent(mmevent);
 #ifdef LOG_INPUT
@@ -356,174 +310,9 @@ void UInputManager::mouseMotionEvent(const SDL_Event& event)
 }
 
 //------------------------------------------------------------------------------
-void UInputManager::joyButtonEvent(U8 deviceID, U8 buttonNum, bool pressed)
-
-{
-   S32 action = pressed ? SI_MAKE : SI_BREAK;
-   S32 objInst = buttonNum + KEY_BUTTON0;
-
-   InputEvent ievent;
-
-   ievent.deviceInst = deviceID;
-   ievent.deviceType = JoystickDeviceType;
-   ievent.modifier = CurrentModifiers();
-   ievent.ascii = 0;
-   ievent.objType = SI_BUTTON;
-   ievent.objInst = objInst;
-   ievent.action = action;
-   ievent.fValues[0] = (action == SI_MAKE) ? 1.0 : 0.0;
-
-   Game->postEvent(ievent);
-#ifdef LOG_INPUT
-   Input::log( "EVENT (Input): joystick%d button%d %s. MODS:%c%c%c \n",
-      deviceID,
-      buttonNum,
-      pressed ? "pressed" : "released",
-      ( CurrentModifiers() & SI_SHIFT ? 'S' : '.' ),
-      ( CurrentModifiers() & SI_CTRL ? 'C' : '.' ),
-      ( CurrentModifiers() & SI_ALT ? 'A' : '.' ));
-#endif
-}
-
-//------------------------------------------------------------------------------
-void UInputManager::joyHatEvent(U8 deviceID, U8 hatNum,
-   U8 prevHatState, U8 currHatState)
-{
-   if (prevHatState == currHatState)
-      return;
-
-   InputEvent ievent;
-
-   ievent.deviceInst = deviceID;
-   ievent.deviceType = JoystickDeviceType;
-   ievent.modifier = CurrentModifiers();
-   ievent.ascii = 0;
-   ievent.objType = SI_POV;
-
-   // first break any positions that are no longer valid
-   ievent.action = SI_BREAK;
-   ievent.fValues[0] = 0.0;
-
-   if (prevHatState & SDL_HAT_UP && !(currHatState & SDL_HAT_UP))
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Up POV released.\n");
-#endif
-      ievent.objInst = SI_UPOV;
-      Game->postEvent(ievent);
-   }
-   else if (prevHatState & SDL_HAT_DOWN && !(currHatState & SDL_HAT_DOWN))
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Down POV released.\n");
-#endif
-      ievent.objInst = SI_DPOV;
-      Game->postEvent(ievent);
-   }
-   if (prevHatState & SDL_HAT_LEFT && !(currHatState & SDL_HAT_LEFT))
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Left POV released.\n");
-#endif
-      ievent.objInst = SI_LPOV;
-      Game->postEvent(ievent);
-   }
-   else if (prevHatState & SDL_HAT_RIGHT && !(currHatState & SDL_HAT_RIGHT))
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Right POV released.\n");
-#endif
-      ievent.objInst = SI_RPOV;
-      Game->postEvent(ievent);
-   }
-
-   // now do the make events
-   ievent.action = SI_MAKE;
-   ievent.fValues[0] = 1.0;
-
-   if (!(prevHatState & SDL_HAT_UP) && currHatState & SDL_HAT_UP)
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Up POV pressed.\n");
-#endif
-      ievent.objInst = SI_UPOV;
-      Game->postEvent(ievent);
-   }
-   else if (!(prevHatState & SDL_HAT_DOWN) && currHatState & SDL_HAT_DOWN)
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Down POV pressed.\n");
-#endif
-      ievent.objInst = SI_DPOV;
-      Game->postEvent(ievent);
-   }
-   if (!(prevHatState & SDL_HAT_LEFT) && currHatState & SDL_HAT_LEFT)
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Left POV pressed.\n");
-#endif
-      ievent.objInst = SI_LPOV;
-      Game->postEvent(ievent);
-   }
-   else if (!(prevHatState & SDL_HAT_RIGHT) && currHatState & SDL_HAT_RIGHT)
-   {
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): Right POV pressed.\n");
-#endif
-      ievent.objInst = SI_RPOV;
-      Game->postEvent(ievent);
-   }
-}
-
-//------------------------------------------------------------------------------
-void UInputManager::joyAxisEvent(U8 deviceID, U8 axisNum, S16 axisValue)
-{
-   JoystickInputDevice* stick;
-
-   stick = mJoystickList[deviceID];
-   AssertFatal(stick, "JoystickInputDevice* is NULL");
-   JoystickAxisInfo axisInfo = stick->getAxisInfo(axisNum);
-
-   if (axisInfo.type == -1)
-      return;
-
-   // scale the value to [-1,1]
-   F32 scaledValue = 0;
-   if (axisValue < 0)
-      scaledValue = -F32(axisValue) / axisInfo.minValue;
-   else if (axisValue > 0)
-      scaledValue = F32(axisValue) / axisInfo.maxValue;
-
-   if (scaledValue > 1.f)
-      scaledValue = 1.f;
-   else if (scaledValue < -1.f)
-      scaledValue = -1.f;
-
-   // create and post the event
-   InputEvent ievent;
-
-   ievent.deviceInst = deviceID;
-   ievent.deviceType = JoystickDeviceType;
-   ievent.modifier = CurrentModifiers();
-   ievent.ascii = 0;
-   ievent.objType = axisInfo.type;
-   ievent.objInst = 0;
-   ievent.action = SI_MOVE;
-   ievent.fValues[0] = scaledValue;
-
-   Game->postEvent(ievent);
-
-#ifdef LOG_INPUT
-      Input::log( "EVENT (Input): joystick axis %d moved: %.1f.\n",
-         axisNum, ievent.fValues[0]);
-#endif
-
-}
-
-//------------------------------------------------------------------------------
 void UInputManager::mouseButtonEvent(const SDL_Event& event)
 {
-   S32 action = (event.type == SDL_MOUSEBUTTONDOWN) ? SI_MAKE : SI_BREAK;
+   S32 action = (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) ? SI_MAKE : SI_BREAK;
    S32 objInst = -1;
 
    // The browser's fourth and fifth buttons (back and forward) are SDL's X1
@@ -583,8 +372,8 @@ void UInputManager::mouseButtonEvent(const SDL_Event& event)
 // movements up until they make one. The SDL 1.2 back-end ignored the wheel.
 void UInputManager::mouseWheelEvent(const SDL_Event& event)
 {
-   const S32 notches = event.wheel.y;
-   if (notches == 0)
+   const F32 notches = event.wheel.y;
+   if (notches == 0.0f)
       return; // sideways only, or not a whole notch yet
 
    InputEvent ievent;
@@ -596,8 +385,8 @@ void UInputManager::mouseWheelEvent(const SDL_Event& event)
    ievent.objType = SI_ZAXIS;
    ievent.objInst = 0;
    ievent.action = SI_MOVE;
-   ievent.fValues[0] = (F32)(notches *
-      Con::getIntVariable("$pref::Input::MouseWheelSpeed", 120));
+   ievent.fValues[0] = notches *
+      (F32)Con::getIntVariable("$pref::Input::MouseWheelSpeed", 120);
 #ifdef LOG_INPUT
    Input::log( "EVENT (Input): mouse wheel moved %s: %.1f. MODS:%c%c%c\n",
       notches > 0 ? "up" : "down",
@@ -706,11 +495,11 @@ void UInputManager::keyEvent(const SDL_Event& event)
    // reads it from the browser's KeyboardEvent.code. A key Torque has no code
    // for is dropped, since KEY_NULL is what a typed character arrives as, not
    // a key.
-   const U32 keyCode = KeyMapSDL::getTorqueScanCodeFromSDL(event.key.keysym.scancode);
+   const U32 keyCode = KeyMapSDL::getTorqueScanCodeFromSDL(event.key.scancode);
    if (keyCode == KEY_NULL)
       return;
 
-   S32 action = (event.type == SDL_KEYDOWN) ? SI_MAKE : SI_BREAK;
+   S32 action = (event.type == SDL_EVENT_KEY_DOWN) ? SI_MAKE : SI_BREAK;
    // SDL marks the repeats of a held key; a key that was down already for any
    // other reason counts as repeating too
    if (action == SI_MAKE && (event.key.repeat || mKeyboardState[keyCode]))
@@ -740,7 +529,7 @@ void UInputManager::keyEvent(const SDL_Event& event)
          ievent.modifier = 0;
          break;
       default:
-         ievent.modifier = KeyMapSDL::getTorqueModFromSDL(event.key.keysym.mod);
+         ievent.modifier = KeyMapSDL::getTorqueModFromSDL(event.key.mod);
          break;
    }
 
@@ -777,30 +566,37 @@ void UInputManager::setWindowLocked(bool locked)
 //------------------------------------------------------------------------------
 void UInputManager::processEvent(const SDL_Event& event)
 {
+   if (event.type >= SDL_EVENT_JOYSTICK_AXIS_MOTION &&
+       event.type <= SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED)
+   {
+      SDLGamepad::processEvent(event);
+      return;
+   }
+
    if (!mEnabled || !isActive())
       return;
 
    switch (event.type)
    {
-      case SDL_MOUSEMOTION:
+      case SDL_EVENT_MOUSE_MOTION:
          if (mMouseActive)
             mouseMotionEvent(event);
          break;
-      case SDL_MOUSEBUTTONUP:
-      case SDL_MOUSEBUTTONDOWN:
+      case SDL_EVENT_MOUSE_BUTTON_UP:
+      case SDL_EVENT_MOUSE_BUTTON_DOWN:
          if (mMouseActive)
             mouseButtonEvent(event);
          break;
-      case SDL_MOUSEWHEEL:
+      case SDL_EVENT_MOUSE_WHEEL:
          if (mMouseActive)
             mouseWheelEvent(event);
          break;
-      case SDL_KEYDOWN:
-      case SDL_KEYUP:
+      case SDL_EVENT_KEY_DOWN:
+      case SDL_EVENT_KEY_UP:
          if (mKeyboardActive)
             keyEvent(event);
          break;
-      case SDL_TEXTINPUT:
+      case SDL_EVENT_TEXT_INPUT:
          if (mKeyboardActive)
             SDLTextInput::postText(event.text.text);
          break;
@@ -813,18 +609,7 @@ void UInputManager::process()
    if (!mEnabled || !isActive())
       return;
 
-   // poll joysticks
-   if (!mJoystickActive)
-      return;
-
-   SDL_JoystickUpdate();
-
-   for (Vector<JoystickInputDevice*>::iterator iter = mJoystickList.begin();
-        iter != mJoystickList.end();
-        ++iter)
-   {
-      (*iter)->process();
-   }
+   SDLGamepad::process();
 }
 
 //------------------------------------------------------------------------------
@@ -972,430 +757,64 @@ void UInputManager::deactivateMouse()
 bool UInputManager::enableJoystick()
 {
    if ( !isEnabled() )
-      return( false );
+      return false;
 
-   if ( isJoystickEnabled() && isJoystickActive() )
-      return( true );
+   const bool ok = SDLGamepad::enableJoystick();
+   if ( ok && isActive() )
+      activateJoystick();
 
-   mJoystickEnabled = true;
-   if ( isActive() )
-      mJoystickEnabled = activateJoystick();
-
-   if ( mJoystickEnabled )
-   {
-      Con::printf( "Joystick enabled." );
-#ifdef LOG_INPUT
-      Input::log( "Joystick enabled.\n" );
-#endif
-   }
-   else
-   {
-      Con::warnf( "Joystick failed to enable!" );
-#ifdef LOG_INPUT
-      Input::log( "Joystick failed to enable!\n" );
-#endif
-   }
-
-   return( mJoystickEnabled );
+   return ok;
 }
 
 //------------------------------------------------------------------------------
 void UInputManager::disableJoystick()
 {
-   if ( !isEnabled() || !isJoystickEnabled())
+   if ( !isEnabled() )
       return;
 
    deactivateJoystick();
-   mJoystickEnabled = false;
-   Con::printf( "Joystick disabled." );
-#ifdef LOG_INPUT
-   Input::log( "Joystick disabled.\n" );
-#endif
+   SDLGamepad::disableJoystick();
+}
+
+//------------------------------------------------------------------------------
+bool UInputManager::isJoystickEnabled()
+{
+   return SDLGamepad::isJoystickEnabled();
 }
 
 //------------------------------------------------------------------------------
 bool UInputManager::activateJoystick()
 {
-   if ( !isEnabled() || !isActive() || !isJoystickEnabled() )
-      return( false );
+   if ( !isEnabled() || !isActive() || !SDLGamepad::isJoystickEnabled() )
+      return false;
 
-   mJoystickActive = false;
-   JoystickInputDevice* dptr;
-   for ( iterator ptr = begin(); ptr != end(); ptr++ )
-   {
-      dptr = dynamic_cast<JoystickInputDevice*>( *ptr );
-      if ( dptr && dptr->getDeviceType() == JoystickDeviceType)
-         if ( dptr->activate() )
-            mJoystickActive = true;
-   }
-#ifdef LOG_INPUT
-   Input::log( mJoystickActive ?
-      "Joystick activated.\n" : "Joystick failed to activate!\n" );
-#endif
-   return( mJoystickActive );
+   SDLGamepad::activate();
+   return SDLGamepad::isActive();
 }
 
 //------------------------------------------------------------------------------
 void UInputManager::deactivateJoystick()
 {
-   if ( isEnabled() && isJoystickActive() )
-   {
-      mJoystickActive = false;
-      JoystickInputDevice* dptr;
-      for ( iterator ptr = begin(); ptr != end(); ptr++ )
-      {
-         dptr = dynamic_cast<JoystickInputDevice*>( *ptr );
-         if ( dptr && dptr->getDeviceType() == JoystickDeviceType)
-            dptr->deactivate();
-      }
-#ifdef LOG_INPUT
-      Input::log( "Joystick deactivated.\n" );
-#endif
-   }
+   if ( isEnabled() )
+      SDLGamepad::deactivate();
+}
+
+//------------------------------------------------------------------------------
+bool UInputManager::isJoystickActive()
+{
+   return SDLGamepad::isActive() && SDLGamepad::isJoystickEnabled();
 }
 
 //------------------------------------------------------------------------------
 const char* UInputManager::getJoystickAxesString( U32 deviceID )
 {
-   for (Vector<JoystickInputDevice*>::iterator iter = mJoystickList.begin();
-        iter != mJoystickList.end();
-        ++iter)
-   {
-      if ((*iter)->getDeviceID() == deviceID)
-         return (*iter)->getJoystickAxesString();
-   }
-   return( "" );
-}
-
-//==============================================================================
-// JoystickInputDevice
-//==============================================================================
-JoystickInputDevice::JoystickInputDevice(U8 deviceID)
-{
-   mActive = false;
-   mStick = NULL;
-   mAxisList.clear();
-   mDeviceID = deviceID;
-   dSprintf(mName, 29, "joystick%d", mDeviceID);
-
-   mButtonState.clear();
-   mHatState.clear();
-   mNumAxes = mNumButtons = mNumHats = mNumBalls = 0;
-
-   loadJoystickInfo();
-
-   // initialize state variables
-   for (int i = 0; i < mNumButtons; ++i)
-      mButtonState.push_back(false); // all buttons unpressed initially
-
-   for (int i = 0; i < mNumHats; ++i)
-      mHatState.push_back(SDL_HAT_CENTERED); // hats centered initially
+   return SDLGamepad::getJoystickAxesString( deviceID );
 }
 
 //------------------------------------------------------------------------------
-JoystickInputDevice::~JoystickInputDevice()
+bool UInputManager::joystickDetected()
 {
-   if (isActive())
-      deactivate();
-}
-
-//------------------------------------------------------------------------------
-bool JoystickInputDevice::activate()
-{
-   if (isActive())
-      return true;
-
-   // open the stick
-   mStick = SDL_JoystickOpen(mDeviceID);
-   if (mStick == NULL)
-   {
-      Con::printf("Unable to activate %s: %s", getDeviceName(), SDL_GetError());
-      return false;
-   }
-
-   // reload axis mapping info
-   loadAxisInfo();
-
-   mActive = true;
-   return true;
-}
-
-//------------------------------------------------------------------------------
-bool JoystickInputDevice::deactivate()
-{
-   if (!isActive())
-      return true;
-
-   if (mStick != NULL)
-   {
-      SDL_JoystickClose(mStick);
-      mStick = NULL;
-   }
-
-   mActive = false;
-   return true;
-}
-
-//------------------------------------------------------------------------------
-const char* JoystickInputDevice::getName()
-{
-   return SDL_JoystickNameForIndex(mDeviceID);
-}
-
-//------------------------------------------------------------------------------
-void JoystickInputDevice::reset()
-{
-   UInputManager* manager = dynamic_cast<UInputManager*>(Input::getManager());
-   if (!manager)
-      return;
-
-   // clear joystick state variables
-
-   // buttons
-   for (int i = 0; i < mButtonState.size(); ++i)
-      if (mButtonState[i])
-      {
-         manager->joyButtonEvent(mDeviceID, i, false);
-         mButtonState[i] = false;
-      }
-
-   // hats
-   for (int i = 0; i < mHatState.size(); ++i)
-      if (mHatState[i] != SDL_HAT_CENTERED)
-      {
-         manager->joyHatEvent(mDeviceID, i, mHatState[i], SDL_HAT_CENTERED);
-         mHatState[i] = SDL_HAT_CENTERED;
-      }
-
-   // axis and ball state is not maintained
-}
-
-//------------------------------------------------------------------------------
-bool JoystickInputDevice::process()
-{
-   if (!isActive())
-      return false;
-
-   UInputManager* manager = dynamic_cast<UInputManager*>(Input::getManager());
-   if (!manager)
-      return false;
-
-   // axes
-   for (int i = 0; i < mNumAxes; ++i)
-   {
-      // skip the axis if we don't have a mapping for it
-      if (mAxisList[i].type == -1)
-         continue;
-      manager->joyAxisEvent(mDeviceID, i, SDL_JoystickGetAxis(mStick, i));
-   }
-
-   // buttons
-   for (int i = 0; i < mNumButtons; ++i)
-   {
-      if (bool(SDL_JoystickGetButton(mStick, i)) ==
-         mButtonState[i])
-         continue;
-      mButtonState[i] = !mButtonState[i];
-      manager->joyButtonEvent(mDeviceID, i, mButtonState[i]);
-   }
-
-   // hats
-   for (int i = 0; i < mNumHats; ++i)
-   {
-      U8 currHatState = SDL_JoystickGetHat(mStick, i);
-      if (mHatState[i] == currHatState)
-         continue;
-
-      manager->joyHatEvent(mDeviceID, i, mHatState[i], currHatState);
-      mHatState[i] = currHatState;
-   }
-
-   // ballz
-   // JMQTODO: how to map ball events (xaxis,yaxis?)
-   return true;
-}
-
-//------------------------------------------------------------------------------
-static S32 GetAxisType(S32 axisNum, const char* namedType)
-{
-   S32 axisType = -1;
-
-   if (namedType != NULL)
-   {
-      if (dStricmp(namedType, "xaxis")==0)
-         axisType = SI_XAXIS;
-      else if (dStricmp(namedType, "yaxis")==0)
-         axisType = SI_YAXIS;
-      else if (dStricmp(namedType, "zaxis")==0)
-         axisType = SI_ZAXIS;
-      else if (dStricmp(namedType, "rxaxis")==0)
-         axisType = SI_RXAXIS;
-      else if (dStricmp(namedType, "ryaxis")==0)
-         axisType = SI_RYAXIS;
-      else if (dStricmp(namedType, "rzaxis")==0)
-         axisType = SI_RZAXIS;
-      else if (dStricmp(namedType, "slider")==0)
-         axisType = SI_SLIDER;
-   }
-
-   if (axisType == -1)
-   {
-      // use a hardcoded default mapping if possible
-      switch (axisNum)
-      {
-         case 0:
-            axisType = SI_XAXIS;
-            break;
-         case 1:
-            axisType = SI_YAXIS;
-            break;
-         case 2:
-            axisType = SI_RZAXIS;
-            break;
-         case 3:
-            axisType = SI_SLIDER;
-            break;
-      }
-   }
-
-   return axisType;
-}
-
-//------------------------------------------------------------------------------
-void JoystickInputDevice::loadJoystickInfo()
-{
-   bool opened = false;
-   if (mStick == NULL)
-   {
-      mStick = SDL_JoystickOpen(mDeviceID);
-      if (mStick == NULL)
-      {
-         Con::printf("Unable to open %s: %s", getDeviceName(), SDL_GetError());
-         return;
-      }
-      opened = true;
-   }
-
-   // get the number of thingies on this joystick
-   mNumAxes = SDL_JoystickNumAxes(mStick);
-   mNumButtons = SDL_JoystickNumButtons(mStick);
-   mNumHats = SDL_JoystickNumHats(mStick);
-   mNumBalls = SDL_JoystickNumBalls(mStick);
-
-   // load axis mapping info
-   loadAxisInfo();
-
-   if (opened)
-   {
-      SDL_JoystickClose(mStick);
-      mStick = NULL;
-   }
-}
-
-//------------------------------------------------------------------------------
-// for each axis on a joystick, torque needs to know the type of the axis
-// (SI_XAXIS, etc), the minimum value, and the maximum value.  However none of
-// this information is generally available with the unix/linux api.  All you
-// get is a device and axis number and a value.  Therefore,
-// we allow the user to specify these values in preferences.  hopefully
-// someday we can implement a gui joystick calibrator that takes care of this
-// cruft for the user.
-void JoystickInputDevice::loadAxisInfo()
-{
-   mAxisList.clear();
-
-   AssertFatal(mStick, "mStick is NULL");
-
-   static int AxisDefaults[] = { SI_XAXIS, SI_YAXIS, SI_ZAXIS,
-                                 SI_RXAXIS, SI_RYAXIS, SI_RZAXIS,
-                                 SI_SLIDER };
-
-   int numAxis = SDL_JoystickNumAxes(mStick);
-   for (int i = 0; i < numAxis; ++i)
-   {
-      JoystickAxisInfo axisInfo;
-
-      // defaults
-      axisInfo.type = -1;
-      axisInfo.minValue = -32768;
-      axisInfo.maxValue = 32767;
-
-      // look in console to see if there is mapping information for this axis
-      const int TempBufSize = 1024;
-      char tempBuf[TempBufSize];
-      dSprintf(tempBuf, TempBufSize, "$Pref::Input::Joystick%d::Axis%d",
-         mDeviceID, i);
-
-      const char* axisStr = Con::getVariable(tempBuf);
-      if (axisStr == NULL || dStrlen(axisStr) == 0)
-      {
-         if (i < (int)(sizeof(AxisDefaults) / sizeof(AxisDefaults[0])))
-            axisInfo.type = AxisDefaults[i];
-      }
-      else
-      {
-         // format is "TorqueAxisName MinValue MaxValue";
-         dStrncpy(tempBuf, axisStr, TempBufSize);
-         char* temp = dStrtok( tempBuf, " \0" );
-         if (temp)
-         {
-            axisInfo.type = GetAxisType(i, temp);
-            temp = dStrtok( NULL, " \0" );
-            if (temp)
-            {
-               axisInfo.minValue = dAtoi(temp);
-               temp = dStrtok( NULL, "\0" );
-               if (temp)
-               {
-                  axisInfo.maxValue = dAtoi(temp);
-               }
-            }
-         }
-      }
-
-      mAxisList.push_back(axisInfo);
-   }
-}
-
-//------------------------------------------------------------------------------
-const char* JoystickInputDevice::getJoystickAxesString()
-{
-   char buf[64];
-   dSprintf( buf, sizeof( buf ), "%d", mAxisList.size());
-
-   for (Vector<JoystickAxisInfo>::iterator iter = mAxisList.begin();
-        iter != mAxisList.end();
-        ++iter)
-   {
-      switch ((*iter).type)
-      {
-         case SI_XAXIS:
-            dStrcat( buf, "\tX" );
-            break;
-         case SI_YAXIS:
-            dStrcat( buf, "\tY" );
-            break;
-         case SI_ZAXIS:
-            dStrcat( buf, "\tZ" );
-            break;
-         case SI_RXAXIS:
-            dStrcat( buf, "\tR" );
-            break;
-         case SI_RYAXIS:
-            dStrcat( buf, "\tU" );
-            break;
-         case SI_RZAXIS:
-            dStrcat( buf, "\tV" );
-            break;
-         case SI_SLIDER:
-            dStrcat( buf, "\tS" );
-            break;
-      }
-   }
-
-   char* returnString = Con::getReturnBuffer( dStrlen( buf ) + 1 );
-   dStrcpy( returnString, buf );
-   return( returnString );
+   return SDLGamepad::isJoystickDetected();
 }
 
 
@@ -1443,24 +862,6 @@ ConsoleFunction( disableMouse, void, 1, 1, "disableMouse()" )
 }
 
 //------------------------------------------------------------------------------
-ConsoleFunction( enableJoystick, bool, 1, 1, "enableJoystick()" )
-{
-   UInputManager* mgr = dynamic_cast<UInputManager*>( Input::getManager() );
-   if ( mgr )
-      return( mgr->enableJoystick() );
-
-   return ( false );
-}
-
-//------------------------------------------------------------------------------
-ConsoleFunction( disableJoystick, void, 1, 1, "disableJoystick()" )
-{
-   UInputManager* mgr = dynamic_cast<UInputManager*>( Input::getManager() );
-   if ( mgr )
-      mgr->disableJoystick();
-}
-
-//------------------------------------------------------------------------------
 ConsoleFunction( enableLocking, void, 1, 1, "enableLocking()" )
 {
    UInputManager* mgr = dynamic_cast<UInputManager*>( Input::getManager() );
@@ -1501,6 +902,7 @@ ConsoleFunction( echoInputState, void, 1, 1, "echoInputState()" )
       Con::printf( "- Joystick is %sabled and %sactive.",
          mgr->isJoystickEnabled() ? "en" : "dis",
          mgr->isJoystickActive() ? "" : "in" );
+      SDLGamepad::echoInputState();
    }
    else
       Con::printf( "Input is not enabled." );

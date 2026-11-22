@@ -31,9 +31,11 @@
 #include "platformX86UNIX/platformGL.h"
 #include "platformX86UNIX/x86UNIXOGLVideo.h"
 #include "platformX86UNIX/x86UNIXState.h"
+#include "platformSDL/sdlTextInput.h"
 
-#include <SDL.h>
-#include <SDL_syswm.h>
+#include <SDL3/SDL.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 
 //------------------------------------------------------------------------------
 bool InitOpenGL()
@@ -171,34 +173,36 @@ void OpenGLDevice::loadResolutions()
    // ...and the modes the display offers. SDL lists a size once for each
    // refresh rate it can be shown at; this is a list of sizes.
    SDL_Window* window = x86UNIXState->getSDLWindow();
-   int displayIndex = window ? SDL_GetWindowDisplayIndex(window) : 0;
-   if (displayIndex < 0)
-      displayIndex = 0;
-
-   const int numModes = SDL_GetNumDisplayModes(displayIndex);
-   for (int i = 0; i < numModes; ++i)
+   const SDL_DisplayID displayId = window ? SDL_GetDisplayForWindow(window) : SDL_GetPrimaryDisplay();
+   int numModes = 0;
+   SDL_DisplayMode** modes = displayId ? SDL_GetFullscreenDisplayModes(displayId, &numModes) : NULL;
+   if (modes)
    {
-      SDL_DisplayMode mode;
-      if (SDL_GetDisplayMode(displayIndex, i, &mode) != 0)
-         continue;
-
-      // do we already have this mode?
-      bool found = false;
-      for (Vector<Resolution>::iterator iter = mResolutionList.begin();
-           iter != mResolutionList.end();
-           ++iter)
+      for (int i = 0; i < numModes; ++i)
       {
-         if (iter->w == mode.w && iter->h == mode.h)
+         const SDL_DisplayMode* mode = modes[i];
+         if (!mode)
+            continue;
+
+         // do we already have this mode?
+         bool found = false;
+         for (Vector<Resolution>::iterator iter = mResolutionList.begin();
+              iter != mResolutionList.end();
+              ++iter)
          {
-            found = true;
-            break;
+            if (iter->w == mode->w && iter->h == mode->h)
+            {
+               found = true;
+               break;
+            }
          }
+         if (!found)
+            // don't check these resolutions because they should be OK
+            // (and checking might drop resolutions that are higher than the
+            // current desktop bpp)
+            addResolution(mode->w, mode->h, false);
       }
-      if (!found)
-         // don't check these resolutions because they should be OK
-         // (and checking might drop resolutions that are higher than the
-         // current desktop bpp)
-         addResolution(mode.w, mode.h, false);
+      SDL_free(modes);
    }
 }
 
@@ -295,17 +299,17 @@ static bool CreateGLWindow( U32 width, U32 height, bool fullScreen, bool exactSi
    // display at the desktop's own mode, never a mode switch.
    Uint32 flags = SDL_WINDOW_OPENGL;
    if ( fullScreen )
-      flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
+      flags |= SDL_WINDOW_FULLSCREEN;
    if ( !exactSize )
       flags |= SDL_WINDOW_RESIZABLE;
 
-   SDL_Window* window = SDL_CreateWindow( x86UNIXState->getWindowName(),
-      SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, flags );
+   SDL_Window* window = SDL_CreateWindow( x86UNIXState->getWindowName(), width, height, flags );
    if ( window == NULL )
    {
       Con::printf( "Unable to create the window: %s", SDL_GetError() );
       return false;
    }
+   SDL_SetWindowPosition( window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED );
 
    sGLContext = SDL_GL_CreateContext( window );
    if ( sGLContext == NULL )
@@ -317,28 +321,19 @@ static bool CreateGLWindow( U32 width, U32 height, bool fullScreen, bool exactSi
 
    x86UNIXState->setSDLWindow( window );
    x86UNIXState->setWindowCreated( true );
+   SDLTextInput::setWindow( window );
    return true;
 }
 
 //------------------------------------------------------------------------------
 // Take the window in or out of fullscreen.
-//
-// SDL's own record of whether the window is fullscreen goes stale whenever the
-// window manager changes it (SUPER+F in Hyprland): SDL reads _NET_WM_STATE, but
-// only for whether the window is shown or maximized. And SDL_SetWindowFullscreen
-// does nothing when asked for the state SDL believes the window is in already.
-// So when SDL's record disagrees with the window, it is first told the truth --
-// asked for the state the window is really in, which changes nothing on screen
-// -- and then asked for the change. Each call waits on the window manager for a
-// moment (about a tenth of a second on Hyprland), which is fine for a switch
-// the player asked for.
 static void SetWindowFullScreen( SDL_Window* window, bool fullScreen )
 {
    const bool sdlThinksFullScreen = ( SDL_GetWindowFlags( window ) & SDL_WINDOW_FULLSCREEN ) != 0;
    if ( sdlThinksFullScreen == fullScreen )
-      SDL_SetWindowFullscreen( window, fullScreen ? 0 : SDL_WINDOW_FULLSCREEN_DESKTOP );
+      SDL_SetWindowFullscreen( window, !fullScreen );
 
-   SDL_SetWindowFullscreen( window, fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0 );
+   SDL_SetWindowFullscreen( window, fullScreen );
 }
 
 //------------------------------------------------------------------------------
@@ -482,7 +477,7 @@ void OpenGLDevice::releaseExactSize()
 
    // The window manager has placed the window by now. Clearing the size hints
    // leaves it where it is, and lets the player resize it.
-   SDL_SetWindowResizable( window, SDL_TRUE );
+   SDL_SetWindowResizable( window, true );
    Con::printf( "Window released from its exact size after %d ms; it can be resized now.",
       ExactSizeHoldMs );
 }
@@ -531,35 +526,41 @@ bool OpenGLDevice::isWindowFullScreen()
       return false;
 
 #if defined(SDL_VIDEO_DRIVER_X11)
-   SDL_SysWMinfo info;
-   SDL_VERSION( &info.version );
-   if ( SDL_GetWindowWMInfo( window, &info ) && info.subsystem == SDL_SYSWM_X11 )
+   const char* videoDriver = SDL_GetCurrentVideoDriver();
+   if ( videoDriver && dStrcmp( videoDriver, "x11" ) == 0 )
    {
-      Display* display = info.info.x11.display;
-      const Atom netWMState = XInternAtom( display, "_NET_WM_STATE", True );
-      const Atom netWMStateFullScreen = XInternAtom( display, "_NET_WM_STATE_FULLSCREEN", True );
-
-      // Atoms that do not exist yet mean no window manager has set the state
-      // on any window, this one included.
-      if ( netWMState == None || netWMStateFullScreen == None )
-         return false;
-
-      bool fullScreen = false;
-      Atom type;
-      int format;
-      unsigned long count, remaining;
-      unsigned char* data = NULL;
-      if ( XGetWindowProperty( display, info.info.x11.window, netWMState, 0, 64,
-             False, XA_ATOM, &type, &format, &count, &remaining, &data ) == Success &&
-           data != NULL )
+      const SDL_PropertiesID props = SDL_GetWindowProperties( window );
+      Display* display = reinterpret_cast<Display*>(
+         SDL_GetPointerProperty( props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, NULL ) );
+      const Window xwindow = static_cast<Window>(
+         SDL_GetNumberProperty( props, SDL_PROP_WINDOW_X11_WINDOW_NUMBER, 0 ) );
+      if ( display && xwindow )
       {
-         const Atom* atoms = reinterpret_cast<const Atom*>( data );
-         for ( unsigned long i = 0; i < count; ++i )
-            if ( atoms[i] == netWMStateFullScreen )
-               fullScreen = true;
-         XFree( data );
+         const Atom netWMState = XInternAtom( display, "_NET_WM_STATE", True );
+         const Atom netWMStateFullScreen = XInternAtom( display, "_NET_WM_STATE_FULLSCREEN", True );
+
+         // Atoms that do not exist yet mean no window manager has set the state
+         // on any window, this one included.
+         if ( netWMState == None || netWMStateFullScreen == None )
+            return false;
+
+         bool fullScreen = false;
+         Atom type;
+         int format;
+         unsigned long count, remaining;
+         unsigned char* data = NULL;
+         if ( XGetWindowProperty( display, xwindow, netWMState, 0, 64,
+                False, XA_ATOM, &type, &format, &count, &remaining, &data ) == Success &&
+              data != NULL )
+         {
+            const Atom* atoms = reinterpret_cast<const Atom*>( data );
+            for ( unsigned long i = 0; i < count; ++i )
+               if ( atoms[i] == netWMStateFullScreen )
+                  fullScreen = true;
+            XFree( data );
+         }
+         return fullScreen;
       }
-      return fullScreen;
    }
 #endif
 
@@ -601,68 +602,27 @@ const char* OpenGLDevice::getDriverInfo()
 //------------------------------------------------------------------------------
 bool OpenGLDevice::getGammaCorrection(F32 &g)
 {
-   U16 redtable[256];
-   U16 greentable[256];
-   U16 bluetable[256];
-
-   SDL_Window* window = x86UNIXState->getSDLWindow();
-   if (window == NULL ||
-       SDL_GetWindowGammaRamp(window, redtable, greentable, bluetable) == -1)
-   {
-      Con::warnf("getGammaCorrection error: %s", SDL_GetError());
-      return false;
-   }
-
-   F32 csum = 0.0;
-   U32 ccount = 0;
-
-   for (U16 i = 0; i < 256; ++i)
-   {
-      if (i != 0 && redtable[i] != 0 && redtable[i] != 65535)
-      {
-         F64 b = (F64) i/256.0;
-         F64 a = (F64) redtable[i]/65535.0;
-         F32 c = (F32) (mLog(a)/mLog(b));
-
-         csum += c;
-         ++ccount;
-      }
-   }
-   g = csum/ccount;
-
-   return true;
+   // SDL3 removed per-window gamma ramp APIs.
+   return false;
 }
 
 //------------------------------------------------------------------------------
 bool OpenGLDevice::setGammaCorrection(F32 g)
 {
-   U16 redtable[256];
-   U16 greentable[256];
-   U16 bluetable[256];
-
-   for (U16 i = 0; i < 256; ++i)
-      redtable[i] = static_cast<U16>(mPow((F32) i/256.0f, g) * 65535.0f);
-   dMemcpy(greentable,redtable,256*sizeof(U16));
-   dMemcpy(bluetable,redtable,256*sizeof(U16));
-
-   SDL_Window* window = x86UNIXState->getSDLWindow();
-   S32 ok = window ? SDL_SetWindowGammaRamp(window, redtable, greentable, bluetable) : -1;
-   if (ok == -1)
-      Con::warnf("Error setting gamma correction: %s", SDL_GetError());
-
-   return ok != -1;
+   return false;
 }
 
 //------------------------------------------------------------------------------
 bool OpenGLDevice::getVerticalSync()
 {
-   return SDL_GL_GetSwapInterval() != 0;
+   int interval = 0;
+   return SDL_GL_GetSwapInterval(&interval) && interval != 0;
 }
 
 //------------------------------------------------------------------------------
 bool OpenGLDevice::setVerticalSync( bool on )
 {
-   return SDL_GL_SetSwapInterval( on ? 1 : 0 ) == 0;
+   return SDL_GL_SetSwapInterval( on ? 1 : 0 );
 }
 
 //------------------------------------------------------------------------------

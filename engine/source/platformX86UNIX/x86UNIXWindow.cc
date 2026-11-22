@@ -40,6 +40,7 @@
 
 #ifndef DEDICATED
 #include "platformX86UNIX/x86UNIXInputManager.h"
+#include "platformSDL/sdlGamepad.h"
 #include "platformSDL/sdlTextInput.h"
 #endif
 
@@ -51,7 +52,7 @@
 #include <sys/wait.h> // waitpid
 
 #ifndef DEDICATED
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #endif
 
 x86UNIXPlatformState *x86UNIXState;
@@ -138,38 +139,28 @@ static void UpdateDesktopMode()
       return;
 
    SDL_Window* window = x86UNIXState->getSDLWindow();
-   int displayIndex = window ? SDL_GetWindowDisplayIndex(window) : 0;
-   if (displayIndex < 0)
-      displayIndex = 0;
-
-   SDL_DisplayMode mode;
-   if (SDL_GetDesktopDisplayMode(displayIndex, &mode) != 0)
+   const SDL_DisplayID displayId = window ? SDL_GetDisplayForWindow(window) : SDL_GetPrimaryDisplay();
+   const SDL_DisplayMode* mode = displayId ? SDL_GetDesktopDisplayMode(displayId) : NULL;
+   if (!mode)
       return;
 
-   x86UNIXState->setDesktopSize(mode.w, mode.h);
-   x86UNIXState->setDesktopBpp(SDL_BITSPERPIXEL(mode.format));
+   x86UNIXState->setDesktopSize(mode->w, mode->h);
+   x86UNIXState->setDesktopBpp(SDL_BITSPERPIXEL(mode->format));
 }
 
 //------------------------------------------------------------------------------
 static bool InitSDL()
 {
-   // This back-end runs on SDL 2's X11 driver, and under Wayland on Xwayland.
-   // SDL 2 tries X11 first anyway where it has both; saying so here keeps it
-   // that way whatever SDL's own order becomes, while SDL_VIDEODRIVER in the
-   // environment still wins, since a hint set at default priority gives way to
-   // it. Native Wayland is for later: the fonts (x86UNIXFont.cc) open an X
-   // display of their own. A hint rather than setenv, which would also have
-   // reached every program the engine starts, the web browser included.
-   SDL_SetHint(SDL_HINT_VIDEODRIVER, "x11");
+   // This back-end runs on SDL3's X11 driver, and under Wayland on Xwayland.
+   // SDL3 tries X11 or Wayland based on environment/preference; hinting X11
+   // here preserves X11 by default while SDL_VIDEO_DRIVER in the environment
+   // still wins, since a hint set at default priority gives way to it.
+   SDL_SetHint(SDL_HINT_VIDEO_DRIVER, "x11");
 
-   if (SDL_Init(SDL_INIT_VIDEO) != 0)
+   if (!SDL_Init(SDL_INIT_VIDEO))
       return false;
 
    atexit(SDL_Quit);
-
-   // SDL starts with text input on. It stays off until a text field asks for
-   // it (platformSDL/sdlTextInput.h).
-   SDL_StopTextInput();
 
    UpdateDesktopMode();
 
@@ -209,39 +200,6 @@ static void SetAppState()
 }
 
 //------------------------------------------------------------------------------
-static void ProcessWindowEvent(const SDL_WindowEvent& event)
-{
-   switch (event.event)
-   {
-      case SDL_WINDOWEVENT_SIZE_CHANGED:
-         // Resized -- by a drag, by a tiling window manager laying the window
-         // out, into or out of fullscreen, or by setScreenMode itself. Under
-         // SDL 2 the GL drawable follows the window, as it does on Windows, so
-         // following a resize is only a matter of telling the canvas, and it
-         // is done straight away. SDL 1.2 had to rebuild the surface and reload
-         // every texture, so the SDL 1.2 back-end waited for a drag to settle.
-         OpenGLDevice::followWindow();
-         Game->refreshWindow();
-         break;
-
-      case SDL_WINDOWEVENT_EXPOSED:
-         Game->refreshWindow();
-         break;
-
-      case SDL_WINDOWEVENT_FOCUS_GAINED:
-      case SDL_WINDOWEVENT_FOCUS_LOST:
-      case SDL_WINDOWEVENT_MINIMIZED:
-      case SDL_WINDOWEVENT_RESTORED:
-         SetAppState();
-         break;
-   }
-}
-
-//------------------------------------------------------------------------------
-// The event loop. SDL's queue is emptied here, once a frame and in one place:
-// window events are handled here and input goes to the input manager. The
-// SDL 1.2 back-end ran two loops, each picking its own kinds of event out of
-// the queue by mask, which SDL 2's SDL_PeepEvents no longer takes.
 static bool ProcessMessages()
 {
    // Whatever the last frame's input asked of text input -- a text field
@@ -254,22 +212,42 @@ static bool ProcessMessages()
    SDL_Event event;
    while (SDL_PollEvent(&event))
    {
+      if (event.type >= SDL_EVENT_JOYSTICK_AXIS_MOTION &&
+          event.type <= SDL_EVENT_GAMEPAD_STEAM_HANDLE_UPDATED)
+      {
+         SDLGamepad::processEvent(event);
+         continue;
+      }
+
       switch (event.type)
       {
-         case SDL_QUIT:
+         case SDL_EVENT_QUIT:
             return false;
 
-         case SDL_WINDOWEVENT:
-            ProcessWindowEvent(event.window);
+         case SDL_EVENT_WINDOW_RESIZED:
+         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+            OpenGLDevice::followWindow();
+            Game->refreshWindow();
             break;
 
-         case SDL_KEYDOWN:
-         case SDL_KEYUP:
-         case SDL_TEXTINPUT:
-         case SDL_MOUSEMOTION:
-         case SDL_MOUSEBUTTONDOWN:
-         case SDL_MOUSEBUTTONUP:
-         case SDL_MOUSEWHEEL:
+         case SDL_EVENT_WINDOW_EXPOSED:
+            Game->refreshWindow();
+            break;
+
+         case SDL_EVENT_WINDOW_FOCUS_GAINED:
+         case SDL_EVENT_WINDOW_FOCUS_LOST:
+         case SDL_EVENT_WINDOW_MINIMIZED:
+         case SDL_EVENT_WINDOW_RESTORED:
+            SetAppState();
+            break;
+
+         case SDL_EVENT_KEY_DOWN:
+         case SDL_EVENT_KEY_UP:
+         case SDL_EVENT_TEXT_INPUT:
+         case SDL_EVENT_MOUSE_MOTION:
+         case SDL_EVENT_MOUSE_BUTTON_DOWN:
+         case SDL_EVENT_MOUSE_BUTTON_UP:
+         case SDL_EVENT_MOUSE_WHEEL:
             if (inputManager)
                inputManager->processEvent(event);
             break;
@@ -288,7 +266,7 @@ void SendQuitEvent()
 {
    SDL_Event quitevent;
    SDL_zero(quitevent);
-   quitevent.type = SDL_QUIT;
+   quitevent.type = SDL_EVENT_QUIT;
    SDL_PushEvent(&quitevent);
 }
 #endif // DEDICATED
@@ -445,10 +423,12 @@ void Platform::init()
          DisplayErrorAlert("Unable to initialize SDL.");
          ImmediateShutdown(1);
       } else {
-         SDL_version linked;
-         SDL_GetVersion(&linked);
+         const int linked = SDL_GetVersion();
          Con::printf("SDL %d.%d.%d initialized (video driver: %s)",
-            linked.major, linked.minor, linked.patch, SDL_GetCurrentVideoDriver());
+            SDL_VERSIONNUM_MAJOR(linked),
+            SDL_VERSIONNUM_MINOR(linked),
+            SDL_VERSIONNUM_MICRO(linked),
+            SDL_GetCurrentVideoDriver());
       }
 
       // initialize input
@@ -557,7 +537,7 @@ bool Platform::openWebBrowser( const char* webAddress )
    // Torque3D's way. (The fallbacks this used to try, xdg-open, then firefox,
    // konqueror and mozilla, were all started without the address: argv[0]
    // was NULL, which ends the argument list before it begins.)
-   if (SDL_OpenURL(webAddress) != 0)
+   if (!SDL_OpenURL(webAddress))
    {
       Con::warnf("Platform::openWebBrowser: couldn't open %s: %s", webAddress, SDL_GetError());
       return false;

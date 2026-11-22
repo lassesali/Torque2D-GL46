@@ -23,7 +23,7 @@
 // We don't want tests in a shipping version.
 #ifndef TORQUE_SHIPPING
 
-// platformSDL is compiled only into the back-ends built on SDL 2.
+// platformSDL is compiled only into the back-ends built on SDL3.
 #ifdef TORQUE_SDL
 
 #ifndef _UNIT_TESTING_H_

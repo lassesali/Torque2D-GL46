@@ -1,0 +1,217 @@
+Torque 2D - Gamepad & Joystick Support Report (SDL Gamepad API Audit)
+Generated: 2026-11-22
+Repository: C:\Users\lkarh\Downloads\Torque2D-GL46
+Branch: main @ df7b225
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+- Does the engine support gamepads and joysticks?
+  Partially, with major platform-by-platform differences:
+  * Windows supports both standard Xbox-style gamepads (XInput) and generic
+    joysticks/gamepads (DirectInput 8), including vibration/rumble.
+  * Linux supports raw joysticks only (no standard gamepad layout mapping, no
+    hot-plugging, no rumble).
+  * Web (Emscripten) shares Linux's startup-only raw joystick polling code,
+    which misses browser gamepads activated after page load.
+  * macOS, iOS, and Android have no joystick or gamepad support.
+
+- Does the engine use SDL's Gamepad / GameController API?
+  No. There are zero references to SDL_GameController*, SDL_Gamepad*,
+  SDL_INIT_GAMECONTROLLER, or SDL_INIT_GAMEPAD anywhere in engine/source/.
+  * First, SDL 2 (2.32.10) is only built and linked on Linux (vendored static
+    library in engine/lib/sdl) and Web/Emscripten (-sUSE_SDL=2). Windows,
+    macOS, iOS, and Android do not use SDL at all.
+  * Second, the shared engine/source/platformSDL/ layer (sdlInput.cpp,
+    sdlTextInput.cpp, sdlMsgBox.cpp) only handles keyboard scancode mapping,
+    layout-aware Input::getAscii()/getKeyCode(), text input, clipboard, and
+    message boxes.
+  * Third, the Linux and Emscripten input managers use only SDL 2's older,
+    low-level Joystick API (SDL_INIT_JOYSTICK, SDL_NumJoysticks,
+    SDL_JoystickOpen, SDL_JoystickUpdate, SDL_JoystickGetAxis/Button/Hat).
+
+================================================================================
+2. PLATFORM SUPPORT MATRIX
+================================================================================
+
+Platform          | Joysticks   | Gamepad API  | Rumble | Hot-Plug | Backend
+------------------+-------------+--------------+--------+----------+-------------------------
+Windows           | Yes         | Yes (XInput) | Yes    | XInput*  | DirectInput 8 + XInput
+Linux             | Yes (raw)   | No (raw joy) | No     | No       | SDL 2 Joystick API
+Web (Emscripten)  | Limited**   | No (raw joy) | No     | No       | SDL 2 Joystick API
+macOS             | No          | No           | No     | No       | Native Cocoa (stubs)
+iOS               | No          | No           | No     | No       | UIKit (touch/motion)
+Android           | No          | No           | No     | No       | NativeActivity (touch/key)
+
+Notes:
+* Windows XInput polls controller slots 0..3 dynamically (throttled to every
+  250 ms for disconnected slots) and emits connect/disconnect events; DirectInput
+  devices are enumerated once in DInputManager::enable().
+** Browsers only expose gamepads to a page after a user presses a button on the
+   controller; because EmscriptenInputManager only calls SDL_NumJoysticks() once
+   during startup, controllers woken after load are not detected unless input is
+   re-enabled.
+
+================================================================================
+3. PLATFORM-BY-PLATFORM IMPLEMENTATION DETAILS
+================================================================================
+
+A. Windows (platformWin32) - DirectInput 8 + XInput (No SDL)
+- Primary Files:
+  * engine/source/platformWin32/winDirectInput.cc & winDirectInput.h
+  * engine/source/platformWin32/winDInputDevice.cc & winDInputDevice.h
+  * engine/source/platformWin32/winInput.cc & winInput_ScriptBinding.h
+  * engine/source/platform/platformInput_ScriptBinding.h
+- XInput Gamepad Support:
+  * Dynamically loads xinput9_1_0.dll (XInputGetState / XInputSetState) in
+    DInputManager::enable() for up to 4 controllers (slots 0..3).
+  * Emits InputEvent messages with deviceType = GamepadDeviceType
+    ("gamepad0".."gamepad3") and standard Xbox-style control identifiers:
+    - Analog sticks: thumblx, thumbly, thumbrx, thumbry (with XINPUT_DEADZONE)
+    - Analog triggers: triggerl, triggerr
+    - D-pad: dpadu, dpadd, dpadl, dpadr
+    - Buttons: btn_a, btn_b, btn_x, btn_y, btn_l, btn_r, btn_lt, btn_rt,
+      btn_start, btn_back
+    - Connection state: connect (XI_MAKE / XI_BREAK)
+  * Exposes dual-motor vibration via rumble(device, xRumble, yRumble) and
+    TorqueScript helpers enableXInput(), disableXInput(), resetXInput(),
+    isXInputConnected(id), and getXInputState(id, property, current).
+- DirectInput 8 Joystick & Gamepad Support:
+  * Dynamically loads DInput8.dll (DirectInput8Create) and enumerates
+    DI8DEVTYPE_JOYSTICK and DI8DEVTYPE_GAMEPAD in DInputManager::enumerateDevices().
+  * Both device classes are instantiated as JoystickDeviceType ("joystick0",
+    "joystick1", ...) in DInputDevice::DInputDevice(), emitting generic
+    button0..button31, axes (xaxis, yaxis, zaxis, rxaxis, ryaxis, rzaxis,
+    slider), POV hats (xpov..rpov, xpov2..rpov2), and DirectInput rumble.
+  * Exposes script functions enableJoystick(), disableJoystick(),
+    isJoystickDetected(), getJoystickAxes(instance), and getJoystickCount().
+- Important Caveats:
+  * Input::activate() in winInput.cc returns early unless $enableDirectInput is
+    truthy. Because Input::process() only calls DInputManager::process() while
+    Input::smActive is true, scripts must enable/activate DirectInput for both
+    DirectInput and XInput polling to run.
+  * Named XInput ActionMap tokens (thumblx, btn_a, triggerl, etc.) in
+    engine/source/input/actionMap.cc (lines 2105-2143) are compiled only when
+    TORQUE_OS_WIN or TORQUE_OS_XENON is defined.
+
+B. Linux (platformX86UNIX + platformSDL) - SDL 2 Joystick API Only
+- Primary Files:
+  * engine/source/platformX86UNIX/x86UNIXInputManager.cc & .h
+  * engine/source/platformX86UNIX/x86UNIXInput.cc & x86UNIXInput_ScriptBinding.h
+  * engine/source/platformX86UNIX/x86UNIXWindow.cc
+  * engine/source/platformSDL/sdlInput.cpp & sdlInput.h
+  * CMakeLists.txt & engine/lib/CMakeLists.txt
+- Build & SDL Configuration:
+  * Links vendored static SDL 2.32.10 (SDL2::SDL2-static) and defines TORQUE_SDL.
+  * Runs on SDL 2's X11 driver (SDL_HINT_VIDEODRIVER = "x11").
+- Joystick Implementation:
+  * UInputManager::initJoystick() calls SDL_InitSubSystem(SDL_INIT_JOYSTICK),
+    disables SDL joystick event delivery via SDL_JoystickEventState(SDL_IGNORE),
+    and enumerates SDL_NumJoysticks() once during UInputManager::enable().
+  * Creates JoystickInputDevice objects named "joystick0", "joystick1", ...
+    (JoystickDeviceType).
+  * UInputManager::process() calls SDL_JoystickUpdate() each frame and polls
+    SDL_JoystickGetAxis(), SDL_JoystickGetButton(), and SDL_JoystickGetHat().
+  * Axes default in order to SI_XAXIS, SI_YAXIS, SI_ZAXIS, SI_RXAXIS, SI_RYAXIS,
+    SI_RZAXIS, SI_SLIDER and can be manually overridden via console preferences:
+    $Pref::Input::Joystick<N>::Axis<M> = "TorqueAxisName MinValue MaxValue".
+- Missing Modern Gamepad Features:
+  * No SDL_GameController API usage (no standardized ABXY/trigger/stick mapping
+    from SDL's gamecontrollerdb; raw button/axis indices vary by controller).
+  * No GamepadDeviceType ("gamepad0") events or rumble/haptics support.
+  * No hot-plugging: x86UNIXWindow.cc only forwards keyboard, text, and mouse
+    events from SDL_PollEvent() and ignores SDL_JOYDEVICEADDED / REMOVED.
+
+C. Web / Emscripten (platformEmscripten + platformSDL) - SDL 2 Joystick API
+- Primary Files:
+  * engine/source/platformEmscripten/EmscriptenInputManager.cpp & .h
+  * engine/source/platformEmscripten/EmscriptenInput.cpp
+  * engine/source/platformEmscripten/EmscriptenWindow.cpp
+  * CMakeLists.txt
+- Implementation & Limitations:
+  * Uses Emscripten's SDL 2.32.10 port (-sUSE_SDL=2) with TORQUE_SDL defined.
+  * EmscriptenInputManager.cpp is a direct port of Linux's UInputManager using
+    the same SDL_INIT_JOYSTICK + SDL_JoystickEventState(SDL_IGNORE) + per-frame
+    SDL_JoystickUpdate() polling path.
+  * Practical Browser Limitation: EmscriptenInputManager.cpp (lines 114-116)
+    explicitly comments that a browser only exposes a gamepad to a page once a
+    button on it has been pressed, so SDL_NumJoysticks() usually returns 0 at
+    initialization time. Because EmscriptenWindow.cpp does not listen for
+    SDL_JOYDEVICEADDED/REMOVED and initJoystick() is never re-invoked on device
+    connection, gamepads activated after boot are not picked up automatically.
+
+D. macOS (platformOSX) - Not Supported
+- Primary Files:
+  * engine/source/platformOSX/osxInput.mm
+  * engine/source/platformOSX/osxInputManager.mm & .h
+  * engine/source/platformOSX/osxTorqueView.mm
+- Implementation State:
+  * Uses a native Objective-C++ / Cocoa back-end; does not use SDL.
+  * Input::enableJoystick() unconditionally returns false and
+    Input::disableJoystick() is an empty stub (osxInput.mm lines 255-264).
+  * osxInputManager and osxTorqueView only handle keyboard and mouse events;
+    there is no GameController.framework or IOKit HID integration.
+
+E. iOS (platformiOS) & Android (platformAndroid) - Not Supported
+- Primary Files:
+  * engine/source/platformiOS/iOSInput.mm & iOSEvents.mm
+  * engine/source/platformAndroid/AndroidInput.cpp & T2DActivity.cpp
+- Implementation State:
+  * Both platforms stub isJoystickDetected() to return false and
+    getJoystickAxes() to return "" (iOSInput.mm lines 231-245; AndroidInput.cpp
+    lines 209-223).
+  * iOS does not link or use GameController.framework (GCController); the only
+    JoystickDeviceType reference in platformiOS is commented-out legacy
+    accelerometer code (iOSInput.mm lines 1161-1184).
+  * Android's engine_handle_input() in T2DActivity.cpp (lines 472-657) handles
+    only touch motion (AINPUT_EVENT_TYPE_MOTION -> touch slots) and basic
+    keyboard/volume/back keys (AINPUT_EVENT_TYPE_KEY), with no joystick axis or
+    gamepad button (AKEYCODE_BUTTON_*) handling.
+
+================================================================================
+4. CROSS-PLATFORM INPUT & ACTIONMAP ARCHITECTURE
+================================================================================
+
+- Event Model (engine/source/platform/event.h):
+  * Defines InputDeviceTypes including JoystickDeviceType, GamepadDeviceType,
+    and XInputDeviceType.
+  * Defines generic button codes (KEY_BUTTON0..KEY_BUTTON31), joystick axis and
+    POV codes (SI_XAXIS..SI_SLIDER, SI_XPOV..SI_RPOV2), and XInput-specific
+    codes (XI_CONNECT, XI_THUMBLX..XI_RIGHT_TRIGGER, XI_START..XI_Y).
+- ActionMap Dispatch (engine/source/input/actionMap.cc):
+  * ActionMap::getDeviceTypeAndInstance() parses both "joystick<N>"
+    (JoystickDeviceType) and "gamepad<N>" (GamepadDeviceType) on all platforms.
+  * ActionMap::processMove() supports inversion, scaling, dead zones, and
+    non-linear curves for both JoystickDeviceType and GamepadDeviceType.
+  * However, the gVirtualMap[] table entries for named gamepad inputs
+    ("thumblx", "triggerl", "btn_a", "dpadu", etc.) are wrapped in
+    #if defined(TORQUE_OS_WIN) || defined(TORQUE_OS_XENON) (lines 2105-2143), so
+    non-Windows platforms cannot bind those symbolic names even if a cross-
+    platform gamepad back-end were added without lifting that preprocessor guard.
+
+================================================================================
+5. AUDIT VERIFICATION & KEY REFERENCES
+================================================================================
+
+- Static Codebase Search (git grep across engine/source/):
+  * Searched for: GameController, SDL_Gamepad, SDL_CONTROLLER,
+    SDL_INIT_GAMECONTROLLER, SDL_INIT_GAMEPAD, SDL_JOYDEVICE, GCController,
+    IOHID, AINPUT_SOURCE_JOYSTICK, AINPUT_SOURCE_GAMEPAD, AKEYCODE_BUTTON.
+  * Result: 0 matches in engine/source/.
+- Key Files Audited:
+  * CMakeLists.txt, cmake/PlatformSources.cmake, engine/lib/CMakeLists.txt,
+    engine/lib/sdl/README-TORQUE2D.md
+  * engine/source/platform/event.h, platformInput.h,
+    platformInput_ScriptBinding.h
+  * engine/source/input/actionMap.cc
+  * engine/source/platformSDL/sdlInput.h & sdlInput.cpp
+  * engine/source/platformWin32/winInput.cc, winDirectInput.cc,
+    winDInputDevice.cc, winInput_ScriptBinding.h, winWindow.cc
+  * engine/source/platformX86UNIX/x86UNIXInput.cc, x86UNIXInputManager.cc,
+    x86UNIXInput_ScriptBinding.h, x86UNIXWindow.cc
+  * engine/source/platformEmscripten/EmscriptenInput.cpp,
+    EmscriptenInputManager.cpp, EmscriptenWindow.cpp
+  * engine/source/platformOSX/osxInput.mm, osxInputManager.mm, osxEvents.mm
+  * engine/source/platformiOS/iOSInput.mm
+  * engine/source/platformAndroid/AndroidInput.cpp, T2DActivity.cpp

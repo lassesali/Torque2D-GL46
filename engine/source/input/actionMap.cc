@@ -2102,11 +2102,10 @@ CodeMapping gVirtualMap[] =
    { "lpov2",         SI_POV,    SI_LPOV2        },
    { "rpov2",         SI_POV,    SI_RPOV2        },
 
-   #if defined( TORQUE_OS_WIN ) || defined( TORQUE_OS_XENON )
-   //-------------------------------------- XINPUT EVENTS
+   //-------------------------------------- GAMEPAD / XINPUT EVENTS
    // Controller connect / disconnect:
    { "connect",       XI_BUTTON, XI_CONNECT     },
-   
+
    // L & R Thumbsticks:
    { "thumblx",       XI_AXIS,   XI_THUMBLX     },
    { "thumbly",       XI_AXIS,   XI_THUMBLY     },
@@ -2123,9 +2122,12 @@ CodeMapping gVirtualMap[] =
    { "dpadl",         XI_BUTTON, SI_LPOV   },
    { "dpadr",         XI_BUTTON, SI_RPOV  },
 
-   // START & BACK Buttons:
+   // START, BACK & GUIDE Buttons:
    { "btn_start",     XI_BUTTON, XI_START       },
    { "btn_back",      XI_BUTTON, XI_BACK        },
+   { "btn_guide",     XI_BUTTON, XI_GUIDE       },
+   { "btn_misc1",     XI_BUTTON, XI_MISC1       },
+   { "btn_touchpad",  XI_BUTTON, XI_TOUCHPAD    },
 
    // L & R Thumbstick Buttons:
    { "btn_lt",        XI_BUTTON, XI_LEFT_THUMB  },
@@ -2140,7 +2142,12 @@ CodeMapping gVirtualMap[] =
    { "btn_b",         XI_BUTTON, XI_B           },
    { "btn_x",         XI_BUTTON, XI_X           },
    { "btn_y",         XI_BUTTON, XI_Y           },
-#endif
+
+   // Back Paddle buttons:
+   { "btn_paddle1",   XI_BUTTON, XI_PADDLE1     },
+   { "btn_paddle2",   XI_BUTTON, XI_PADDLE2     },
+   { "btn_paddle3",   XI_BUTTON, XI_PADDLE3     },
+   { "btn_paddle4",   XI_BUTTON, XI_PADDLE4     },
 
 
    //-------------------------------------- MOTION EVENTS

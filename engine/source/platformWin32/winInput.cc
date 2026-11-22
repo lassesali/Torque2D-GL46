@@ -26,6 +26,7 @@
 #include "platformWin32/winDirectInput.h"
 #include "platform/event.h"
 #include "console/console.h"
+#include "platformSDL/sdlGamepad.h"
 
 #include "platform/platformInput_ScriptBinding.h"
 #include "winInput_ScriptBinding.h"
@@ -110,6 +111,10 @@ void Input::init()
    // Init the current modifier keys
    setModifierKeys(0);
    fillAsciiTable();
+
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::init();
+#endif
    Con::printf( "" );
 
 
@@ -261,6 +266,10 @@ U16 Input::getAscii( U16 keyCode, KEY_STATE keyState )
 //------------------------------------------------------------------------------
 void Input::destroy()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+   SDLGamepad::shutdown();
+#endif
+
    if ( smManager && smManager->isEnabled() )
    {
       smManager->disable();
@@ -295,13 +304,19 @@ void Input::activate()
 #endif
 
    DInputDevice::resetModifierKeys();
+
+   smActive = true;
+#ifdef TORQUE_SDL_GAMEPAD
+   if ( Con::getBoolVariable( "$enableGamepad", true ) )
+      SDLGamepad::activate();
+#endif
+
    if ( !Con::getBoolVariable( "$enableDirectInput" ) )
       return;
 
-   if ( smManager && smManager->isEnabled() && !smActive )
+   if ( smManager && smManager->isEnabled() )
    {
       Con::printf( "Activating DirectInput..." );
-      smActive = true;
       DInputManager* dInputManager = dynamic_cast<DInputManager*>( smManager );
       if ( dInputManager )
       {
@@ -317,8 +332,10 @@ void Input::activate()
          else
             dInputManager->deactivateMouse();
 
+#ifndef TORQUE_SDL_GAMEPAD
          if ( dInputManager->isJoystickEnabled() && smLastJoystickActivated )
             dInputManager->activateJoystick();
+#endif
       }
    }
 }
@@ -326,23 +343,31 @@ void Input::activate()
 //------------------------------------------------------------------------------
 void Input::deactivate()
 {
-   if ( smManager && smManager->isEnabled() && smActive )
+   if ( smActive )
    {
-      DInputManager* dInputManager = dynamic_cast<DInputManager*>( smManager );
+#ifdef TORQUE_SDL_GAMEPAD
+      SDLGamepad::deactivate();
+#endif
 
-      if ( dInputManager )
+      if ( smManager && smManager->isEnabled() )
       {
-         smLastKeyboardActivated = dInputManager->isKeyboardActive();
-         smLastMouseActivated    = dInputManager->isMouseActive();
-         smLastJoystickActivated = dInputManager->isJoystickActive();
+         DInputManager* dInputManager = dynamic_cast<DInputManager*>( smManager );
 
-         dInputManager->deactivateKeyboard();
-         dInputManager->deactivateMouse();
-         dInputManager->deactivateJoystick();
+         if ( dInputManager )
+         {
+            smLastKeyboardActivated = dInputManager->isKeyboardActive();
+            smLastMouseActivated    = dInputManager->isMouseActive();
+            smLastJoystickActivated = dInputManager->isJoystickActive();
+
+            dInputManager->deactivateKeyboard();
+            dInputManager->deactivateMouse();
+            dInputManager->deactivateJoystick();
+         }
+
+         Con::printf( "DirectInput deactivated." );
       }
 
       smActive = false;
-      Con::printf( "DirectInput deactivated." );
    }
 }
 
@@ -371,7 +396,15 @@ bool Input::isActive()
 //------------------------------------------------------------------------------
 void Input::process()
 {
-   if ( smManager && smManager->isEnabled() && smActive )
+   if ( !smActive )
+      return;
+
+#ifdef TORQUE_SDL_GAMEPAD
+   if ( Con::getBoolVariable( "$enableGamepad", true ) )
+      SDLGamepad::process();
+#endif
+
+   if ( smManager && smManager->isEnabled() && Con::getBoolVariable( "$enableDirectInput" ) )
       smManager->process();
 }
 
@@ -455,18 +488,29 @@ void Input::deactivateKeyboard()
 //------------------------------------------------------------------------------
 bool Input::enableJoystick()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+	return SDLGamepad::enableJoystick();
+#else
 	return( DInputManager::enableJoystick() );
+#endif
 }
 
 //------------------------------------------------------------------------------
 void Input::disableJoystick()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+	SDLGamepad::disableJoystick();
+#else
 	DInputManager::disableJoystick();
+#endif
 }
 
 //------------------------------------------------------------------------------
 void Input::echoInputState()
 {
+#ifdef TORQUE_SDL_GAMEPAD
+    SDLGamepad::echoInputState();
+#endif
     DInputManager* mgr = dynamic_cast<DInputManager*>( Input::getManager() );
 	
 	if ( mgr && mgr->isEnabled() )

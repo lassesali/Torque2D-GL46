@@ -61,8 +61,8 @@ END
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 4,0,0,0
- PRODUCTVERSION 4,0,0,0
+ FILEVERSION 4,0,1,0
+ PRODUCTVERSION 4,0,1,0
  FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -79,12 +79,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Torque Game Engines"
             VALUE "FileDescription", "Torque 2D: Rocket Edition"
-            VALUE "FileVersion", "4, 0, 0, 0"
+            VALUE "FileVersion", "4, 0, 1, 0"
             VALUE "InternalName", "Torque 2D"
             VALUE "LegalCopyright", "Copyright (c) 2021 Torque Game Engines"
             VALUE "OriginalFilename", "Torque2D.exe"
             VALUE "ProductName", "Torque 2D"
-            VALUE "ProductVersion", "4, 0, 0, 0"
+            VALUE "ProductVersion", "4, 0, 1, 0"
         END
     END
     BLOCK "VarFileInfo"

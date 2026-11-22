@@ -412,7 +412,15 @@ enum JoystickCodes {
    XI_A              = 0x317,
    XI_B              = 0x318,
    XI_X              = 0x319,
-   XI_Y              = 0x320
+   XI_Y              = 0x320,
+
+   XI_GUIDE          = 0x321,
+   XI_MISC1          = 0x322,
+   XI_TOUCHPAD       = 0x323,
+   XI_PADDLE1        = 0x324,
+   XI_PADDLE2        = 0x325,
+   XI_PADDLE3        = 0x326,
+   XI_PADDLE4        = 0x327
 };
 
 enum AccelerometerCodes

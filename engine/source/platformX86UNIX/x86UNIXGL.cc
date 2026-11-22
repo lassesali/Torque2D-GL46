@@ -29,7 +29,7 @@
 #include "math/mPoint.h"
 
 #include <dlfcn.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 // declare stub functions
 #define GL_FUNCTION(fn_return, fn_name, fn_args, fn_value) fn_return stub_##fn_name fn_args{ fn_value }
@@ -227,8 +227,8 @@ namespace GLLoader
       OpenGLDLLShutdown();
 
       // load libGL.so
-      if (SDL_GL_LoadLibrary("libGL.so") == -1 &&
-         SDL_GL_LoadLibrary("libGL.so.1") == -1)
+      if (!SDL_GL_LoadLibrary("libGL.so") &&
+         !SDL_GL_LoadLibrary("libGL.so.1"))
       {
          Con::errorf("Error loading GL library: %s", SDL_GetError());
          return false;
@@ -400,7 +400,9 @@ bool GL_EXT_Init( )
    // Vertical sync goes through SDL (OpenGLDevice::setVerticalSync), which
    // knows which of GLX's swap-control extensions the driver has. Setting the
    // swap interval to what it already is asks whether any of them is there.
-   gGLState.suppSwapInterval = ( SDL_GL_SetSwapInterval( SDL_GL_GetSwapInterval() ) == 0 );
+   int swapInterval = 0;
+   gGLState.suppSwapInterval = SDL_GL_GetSwapInterval(&swapInterval) &&
+                               SDL_GL_SetSwapInterval(swapInterval);
 
    Con::printf("OpenGL Init: Enabled Extensions");
    if (gGLState.suppARBMultitexture)    Con::printf("  ARB_multitexture (Max Texture Units: %d)", gGLState.maxTextureUnits);

@@ -20,6 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 #import "platformOSX/osxInputManager.h"
+#import "platformSDL/sdlGamepad.h"
 
 #pragma mark ---- InputManager Handling ----
 
@@ -47,7 +48,8 @@ void osxInputManager::disable()
 //--------------------------------------------------------------------------
 void osxInputManager::process()
 {
-    // Nothing to process here, yet
+    if (mEnabled)
+        SDLGamepad::process();
 }
 
 #pragma mark ---- Keyboard Handling Functions ----

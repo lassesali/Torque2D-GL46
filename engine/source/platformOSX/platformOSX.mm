@@ -323,6 +323,7 @@ void Platform::init()
 // OS X processing
 void Platform::process()
 {
+    Input::process();
 }
 
 //-----------------------------------------------------------------------------

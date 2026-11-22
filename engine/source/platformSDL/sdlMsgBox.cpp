@@ -21,15 +21,15 @@
 //-----------------------------------------------------------------------------
 
 // Torque3D's platformSDL/sdlMsgBox.cpp: the alerts and Platform::messageBox on
-// SDL_ShowMessageBox, shared by the back-ends built on SDL 2 for a desktop. The
+// SDL_ShowMessageBox, shared by the back-ends built on SDL3 for a desktop. The
 // web build keeps its own (platformEmscripten/EmscriptenAlerts.cpp): in a
-// browser SDL 2 has no SDL_ShowMessageBox.
+// browser SDL3 has no blocking SDL_ShowMessageBox.
 
 #include "platform/platform.h"
 #include "platform/nativeDialogs/msgBox.h"
 #include "console/console.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 // A Unix desktop falls back to zenity when SDL can't show a box (showZenityBox).
 #if defined(__unix__) && !defined(__EMSCRIPTEN__) && !defined(__APPLE__)
@@ -202,14 +202,14 @@ namespace
 
       SDL_Window* window = SDL_GL_GetCurrentWindow();
 
-      const bool wasGrabbed = window && SDL_GetWindowGrab( window );
-      const bool wasRelative = SDL_GetRelativeMouseMode() == SDL_TRUE;
-      const int cursorShown = SDL_ShowCursor( SDL_QUERY );
+      const bool wasGrabbed = window && SDL_GetWindowMouseGrab( window );
+      const bool wasRelative = window && SDL_GetWindowRelativeMouseMode( window );
+      const bool cursorShown = SDL_CursorVisible();
       if ( wasRelative )
-         SDL_SetRelativeMouseMode( SDL_FALSE );
+         SDL_SetWindowRelativeMouseMode( window, false );
       if ( wasGrabbed )
-         SDL_SetWindowGrab( window, SDL_FALSE );
-      SDL_ShowCursor( SDL_ENABLE );
+         SDL_SetWindowMouseGrab( window, false );
+      SDL_ShowCursor();
 
       Uint32 flags = SDL_MESSAGEBOX_BUTTONS_LEFT_TO_RIGHT;
       switch ( icon )
@@ -229,7 +229,7 @@ namespace
       boxData.colorScheme = NULL;
 
       int res = 0;
-      if ( SDL_ShowMessageBox( &boxData, &res ) != 0 )
+      if ( !SDL_ShowMessageBox( &boxData, &res ) )
       {
 #ifdef TORQUE_ZENITY_MSGBOX
          if ( !showZenityBox( boxData, res ) )
@@ -237,11 +237,14 @@ namespace
             res = 0;
       }
 
-      SDL_ShowCursor( cursorShown );
+      if ( cursorShown )
+         SDL_ShowCursor();
+      else
+         SDL_HideCursor();
       if ( wasGrabbed )
-         SDL_SetWindowGrab( window, SDL_TRUE );
+         SDL_SetWindowMouseGrab( window, true );
       if ( wasRelative )
-         SDL_SetRelativeMouseMode( SDL_TRUE );
+         SDL_SetWindowRelativeMouseMode( window, true );
 
       return res;
    }

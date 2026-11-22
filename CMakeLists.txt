@@ -17,7 +17,7 @@ cmake_minimum_required(VERSION 3.21)
 # rather than editing CMAKE_CXX_FLAGS by hand.
 cmake_policy(SET CMP0091 NEW)
 
-project(Torque2D VERSION 4.0.0 LANGUAGES CXX C)
+project(Torque2D VERSION 4.0.1 LANGUAGES CXX C)
 
 # ----------------------------------------------------------------------------
 # Build configurations — mirror the historical VS solution: Debug/Release/Shipping
@@ -76,10 +76,13 @@ endforeach()
 # retired hand-maintained Emscripten recipe set this the same way, globally.)
 if(EMSCRIPTEN)
     add_compile_definitions(EMSCRIPTEN=1)
+    option(TORQUE_EMSCRIPTEN_VENDORED_SDL3
+        "Build vendored SDL3 static library instead of using Emscripten's -sUSE_SDL=3 port"
+        OFF)
 endif()
 
 # ----------------------------------------------------------------------------
-# Third-party static libraries (libogg, libvorbis, lpng, ljpeg, zlib)
+# Third-party static libraries (libogg, libvorbis, lpng, ljpeg, SDL3, zlib)
 # ----------------------------------------------------------------------------
 add_subdirectory(engine/lib)
 
@@ -257,10 +260,14 @@ endif()
 if(WIN32)
     # Windows system libraries (matches the VS solution's AdditionalDependencies).
     # OpenGL is linked via #pragma comment in the platform sources, as before.
+    # Static SDL3 is linked strictly for gamepad/joystick/HIDAPI/haptic support
+    # while preserving native Win32 windowing (winWindow.cc).
     target_link_libraries(Torque2D PRIVATE
         comctl32 comdlg32 user32 advapi32 gdi32 rpcrt4 winmm
         ws2_32 vfw32 imm32 shell32 shlwapi ole32
+        SDL3::SDL3-static
     )
+    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL_GAMEPAD)
 endif()
 
 if(APPLE AND NOT TORQUE_IOS)
@@ -318,13 +325,15 @@ if(APPLE AND NOT TORQUE_IOS)
     target_compile_options(Torque2D PRIVATE
         -include "${CMAKE_SOURCE_DIR}/tools/CMake/macOS-Prefix.h")
 
-    # macOS desktop frameworks (from the historical build recipe). The on-platform
-    # (Mac) session should confirm this links and the app starts; OpenAL is a
-    # framework here (not dynamically loaded as on Windows).
+    # macOS desktop frameworks (from the historical build recipe). Static SDL3 is
+    # linked strictly for gamepad/joystick/HIDAPI/haptic support while preserving
+    # native Cocoa windowing (osxTorqueView.mm).
     target_link_libraries(Torque2D PRIVATE
         "-framework Cocoa" "-framework OpenGL" "-framework CoreData"
         "-framework CoreFoundation" "-framework Foundation" "-framework AppKit"
-        "-framework AVFoundation" "-framework OpenAL")
+        "-framework AVFoundation" "-framework OpenAL"
+        SDL3::SDL3-static)
+    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL_GAMEPAD)
 endif()
 
 if(TORQUE_IOS)
@@ -493,13 +502,14 @@ if(UNIX AND NOT APPLE AND NOT ANDROID AND NOT EMSCRIPTEN)
         Freetype::Freetype
         m dl rt
         X11 Xft fontconfig
-        SDL2::SDL2-static
+        SDL3::SDL3-static
         openal)
 
-    # TORQUE_SDL: the platform layer is built on SDL 2 and compiles
+    # TORQUE_SDL: the platform layer is built on SDL3 and compiles
     # engine/source/platformSDL -- Torque3D's name for the same switch. The unit
     # tests of that shared code are compiled only where it is.
-    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL)
+    # TORQUE_SDL_GAMEPAD enables the shared SDL3 gamepad/joystick manager.
+    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL TORQUE_SDL_GAMEPAD)
 
     # CPU / bitness. detectX86CPUInfo() (platform/platformCPUInfo.asm — 32-bit
     # NASM, it does NOT assemble for elf64) is referenced only when TORQUE_64 is
@@ -541,16 +551,16 @@ if(EMSCRIPTEN)
     # engine's types.gcc.h and some vendored libs both key off bare EMSCRIPTEN.
     # That's what makes the engine select TORQUE_OS_EMSCRIPTEN / platformEmscripten.)
 
-    # SDL 2 is Emscripten's own port -- 2.32.10, the version the Linux build
-    # vendors -- which emcc fetches and builds the first time it is asked for.
+    # SDL3 uses Emscripten's port (-sUSE_SDL=3) by default, or the vendored
+    # static SDL3 library when TORQUE_EMSCRIPTEN_VENDORED_SDL3 is enabled.
     # It makes the canvas and its WebGL context, and delivers every key,
-    # character, mouse and wheel event. -sUSE_SDL=2 is needed when compiling
-    # as well as when linking: it puts the port's headers on the include path,
-    # so that <SDL.h> is found -- the form platformSDL and the Linux back-end
-    # include. TORQUE_SDL: the platform layer is built on SDL 2 and compiles
-    # engine/source/platformSDL, as on Linux.
-    target_compile_options(Torque2D PRIVATE "-sUSE_SDL=2")
-    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL)
+    # character, mouse, wheel, and gamepad/joystick event.
+    if(TORQUE_EMSCRIPTEN_VENDORED_SDL3)
+        target_link_libraries(Torque2D PRIVATE SDL3::SDL3-static)
+    else()
+        target_compile_options(Torque2D PRIVATE "-sUSE_SDL=3")
+    endif()
+    target_compile_definitions(Torque2D PRIVATE TORQUE_SDL TORQUE_SDL_GAMEPAD)
 
     # FreeType (built from source in engine/lib for the web build only) — the
     # rasterizer EmscriptenFont uses to synthesize glyphs from a bundled .ttf when a
@@ -583,8 +593,13 @@ if(EMSCRIPTEN)
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/toybox@/toybox"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/PlanetX@/PlanetX")
 
+    set(_emSdlLinkFlags "")
+    if(NOT TORQUE_EMSCRIPTEN_VENDORED_SDL3)
+        set(_emSdlLinkFlags "-sUSE_SDL=3")
+    endif()
+
     target_link_options(Torque2D PRIVATE
-        "-sUSE_SDL=2"
+        ${_emSdlLinkFlags}
         "-sMIN_WEBGL_VERSION=2"
         "-sMAX_WEBGL_VERSION=2"      # programmable shader GL over WebGL 2 (replaces LEGACY_GL_EMULATION)
         # Fixed 512 MB heap: with ALLOW_MEMORY_GROWTH the WASM heap ArrayBuffer is

@@ -20,6 +20,7 @@
 // IN THE SOFTWARE.
 //-----------------------------------------------------------------------------
 
+#ifndef TORQUE_SDL_GAMEPAD
 /*! Use the isJoystickDetected function to determine if one or more joysticks are connected to the system.
     This doesn't tell us how many joysticks there are, just that there are joysticks. It is our job to find out how many and to attach them.
     @return Returns true if one or more joysticks are attached and detected, false otherwise.
@@ -48,3 +49,4 @@ ConsoleFunctionWithDocs( getJoystickAxes, ConsoleString, 2, 2, (instance) )
    else
       return "";
 }
+#endif // TORQUE_SDL_GAMEPAD

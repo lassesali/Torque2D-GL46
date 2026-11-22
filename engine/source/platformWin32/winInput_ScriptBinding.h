@@ -27,6 +27,7 @@ ConsoleFunctionGroupBegin( InputManagement, "Functions that let you deal with in
     @{
 */
 
+#ifndef TORQUE_SDL_GAMEPAD
 //------------------------------------------------------------------------------
 /*! Use the isJoystickDetected function to determine if one or more joysticks are connected to the system.
     This doesn't tell us how many joysticks there are, just that there are joysticks. It is our job to find out how many and to attach them.
@@ -64,5 +65,6 @@ ConsoleFunctionWithDocs( getJoystickCount, ConsoleInt, 1, 1, ())
     argc; argv;
     return( DInputDevice::getJoystickCount() );
 }
+#endif // TORQUE_SDL_GAMEPAD
 
 /*! @} */ // end group WindowsPlatform

@@ -23,6 +23,8 @@
 #import "platform/platformInput.h"
 #import "platformOSX/osxInputManager.h"
 #import "platform/event.h"
+#import "platformSDL/sdlGamepad.h"
+#import "platform/platformInput_ScriptBinding.h"
 
 #pragma mark ---- Static Variables ----
 InputManager *Input::smManager = 0;
@@ -49,6 +51,8 @@ void Input::init()
         smManager = new osxInputManager();
 
     Input::enable();
+    SDLGamepad::init();
+    SDLGamepad::activate();
 
     if (!smCursorManager)
     {
@@ -65,6 +69,8 @@ void Input::init()
 //--------------------------------------------------------------------------
 void Input::destroy()
 {
+    SDLGamepad::shutdown();
+
     if (smManager)
     {
         smManager->disable();
@@ -116,12 +122,13 @@ void Input::disable()
 // Not used on OS X
 void Input::activate()
 {
+    SDLGamepad::activate();
 }
 
 //------------------------------------------------------------------------------
-// Not used on OS X
 void Input::deactivate()
 {
+    SDLGamepad::deactivate();
 }
 
 //------------------------------------------------------------------------------
@@ -132,9 +139,9 @@ void Input::reactivate()
 
 //------------------------------------------------------------------------------
 // Print the entire input state to the console
-// Not yet implemented or unnecessary. Will resolve in the next platform update
 void Input::echoInputState()
 {
+    SDLGamepad::echoInputState();
 }
 
 //------------------------------------------------------------------------------
@@ -254,13 +261,14 @@ void Input::deactivateKeyboard()
 // Enable joystick input
 bool Input::enableJoystick()
 {
-    return false;
+    return SDLGamepad::enableJoystick();
 }
 
 //------------------------------------------------------------------------------
 // Disable joystick input
 void Input::disableJoystick()
 {
+    SDLGamepad::disableJoystick();
 }
 
 //------------------------------------------------------------------------------

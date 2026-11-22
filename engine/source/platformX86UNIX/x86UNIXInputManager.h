@@ -27,58 +27,11 @@
 #include "platform/platformInput.h"
 #include "platformX86UNIX/platformX86UNIX.h"
 
-#include <SDL.h>
-
-struct JoystickAxisInfo
-{
-      S32 type;
-      S32 minValue;
-      S32 maxValue;
-};
-
-//------------------------------------------------------------------------------
-class JoystickInputDevice : public InputDevice
-{
-  public:
-    JoystickInputDevice(U8 deviceID);
-    ~JoystickInputDevice();
-
-    bool activate();
-    bool deactivate();
-    bool isActive() { return( mActive ); }
-
-    U8 getDeviceType() { return( JoystickDeviceType ); }
-    U8 getDeviceID() { return( mDeviceID ); }
-    const char* getName();
-    const char* getJoystickAxesString();
-
-    void loadJoystickInfo();
-    void loadAxisInfo();
-    JoystickAxisInfo& getAxisInfo(int axisNum) { return mAxisList[axisNum]; }
-
-    bool process();
-    void reset();
-
-  private:
-    bool mActive;
-    U8 mDeviceID;
-    SDL_Joystick* mStick;
-    Vector<JoystickAxisInfo> mAxisList;
-    Vector<bool> mButtonState;
-    Vector<U8> mHatState;
-
-    S32 mNumAxes;
-    S32 mNumButtons;
-    S32 mNumHats;
-    S32 mNumBalls;
-};
+#include <SDL3/SDL.h>
 
 //------------------------------------------------------------------------------
 class UInputManager : public InputManager
 {
-   friend bool JoystickInputDevice::process(); // for joystick event funcs
-   friend void JoystickInputDevice::reset();
-
    public:
       UInputManager();
 
@@ -94,8 +47,8 @@ class UInputManager : public InputManager
       bool onAdd();
       void onRemove();
 
-      // Polls the joysticks. Keyboard and mouse events arrive through
-      // processEvent instead, from the one loop that empties SDL's queue.
+      // Polls the SDL3 gamepad/joystick manager. Keyboard and mouse events
+      // arrive through processEvent instead, from the one loop that empties SDL's queue.
       void process();
 
       // An input event from SDL's queue (x86UNIXWindow.cc): keys, typed text,
@@ -118,29 +71,24 @@ class UInputManager : public InputManager
 
       bool enableJoystick();
       void disableJoystick();
-      bool isJoystickEnabled()      { return( mJoystickEnabled ); }
+      bool isJoystickEnabled();
       bool activateJoystick();
       void deactivateJoystick();
-      bool isJoystickActive()       { return( mJoystickActive ); }
+      bool isJoystickActive();
 
       void setLocking(bool enabled);
       bool getLocking() { return mLocking; }
 
       const char* getJoystickAxesString( U32 deviceID );
-      bool joystickDetected()       { return mJoystickList.size() > 0; }
+      bool joystickDetected();
    private:
       typedef SimGroup Parent;
-      // the following vector is just for quick access during event processing.
-      // it does not manage the cleanup of the JoystickInputDevice objects
-      Vector<JoystickInputDevice*> mJoystickList;
 
       bool mKeyboardEnabled;
       bool mMouseEnabled;
-      bool mJoystickEnabled;
 
       bool mKeyboardActive;
       bool mMouseActive;
-      bool mJoystickActive;
 
       bool mActive;
 
@@ -153,8 +101,6 @@ class UInputManager : public InputManager
       S32 mLastMouseX;
       S32 mLastMouseY;
 
-      void initJoystick();
-
       void resetKeyboardState();
       void resetMouseState();
       void resetInputState();
@@ -163,10 +109,6 @@ class UInputManager : public InputManager
       void unlockInput();
       bool mLocking;
 
-      void joyHatEvent(U8 deviceID, U8 hatNum,
-          U8 prevHatState, U8 currHatState);
-      void joyButtonEvent(U8 deviceID, U8 buttonNum, bool pressed);
-      void joyAxisEvent(U8 deviceID, U8 axisNum, S16 axisValue);
       void mouseButtonEvent(const SDL_Event& event);
       void mouseMotionEvent(const SDL_Event& event);
       void mouseWheelEvent(const SDL_Event& event);

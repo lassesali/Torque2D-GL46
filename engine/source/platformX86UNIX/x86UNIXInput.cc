@@ -28,9 +28,10 @@
 #include "console/console.h"
 #include "platformX86UNIX/x86UNIXState.h"
 #include "platformX86UNIX/x86UNIXInputManager.h"
+#include "platform/platformInput_ScriptBinding.h"
 #include "platformX86UNIX/x86UNIXInput_ScriptBinding.h"
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #ifdef LOG_INPUT
 #include <time.h>
@@ -44,7 +45,7 @@ extern ssize_t x86UNIXWrite(int fd, const void *buf, size_t nbytes);
 #endif
 
 // Input::getKeyCode, Input::getAscii and the clipboard are
-// platformSDL/sdlInput.cpp's, shared with the other back-ends on SDL 2.
+// platformSDL/sdlInput.cpp's, shared with the other back-ends on SDL3.
 
 // Static class variables:
 InputManager*  Input::smManager; //= 0;
@@ -233,7 +234,10 @@ void Input::refreshCursor()
 
 void Input::setCursorState(bool on)
 {
-   SDL_ShowCursor(on ? SDL_ENABLE : SDL_DISABLE);
+   if (on)
+      SDL_ShowCursor();
+   else
+      SDL_HideCursor();
 }
 
 void Input::setCursorShape(U32 cursorID)

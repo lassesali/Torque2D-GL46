@@ -48,6 +48,8 @@ set(TORQUE_PLATFORM_SOURCES_WINDOWS
     # ---- platformWin32/threads ----
     ${TORQUE_SRC}/platformWin32/threads/mutex.cc
     ${TORQUE_SRC}/platformWin32/threads/thread.cc
+    # ---- platformSDL (SDL3 gamepad/joystick back-end) ----
+    ${TORQUE_SRC}/platformSDL/sdlGamepad.cpp
 )
 
 # === macOS (platformOSX) =====================================================
@@ -84,9 +86,11 @@ set(TORQUE_PLATFORM_SOURCES_MACOS
     ${TORQUE_SRC}/platformOSX/osxVideo.mm
     ${TORQUE_SRC}/platformOSX/osxWindow.mm
     ${TORQUE_SRC}/platformOSX/platformOSX.mm
+    # ---- platformSDL (SDL3 gamepad/joystick back-end) ----
+    ${TORQUE_SRC}/platformSDL/sdlGamepad.cpp
 )
 
-# === Linux (platformX86UNIX + platformSDL, on SDL 2's X11 driver) =============
+# === Linux (platformX86UNIX + platformSDL, on SDL3's X11 driver) ==============
 set(TORQUE_PLATFORM_SOURCES_LINUX
     # ---- platformX86UNIX ----
     ${TORQUE_SRC}/platformX86UNIX/x86UNIXAsmBlit.cc
@@ -114,7 +118,9 @@ set(TORQUE_PLATFORM_SOURCES_LINUX
     ${TORQUE_SRC}/platformX86UNIX/x86UNIXTime.cc
     ${TORQUE_SRC}/platformX86UNIX/x86UNIXUtils.cc
     ${TORQUE_SRC}/platformX86UNIX/x86UNIXWindow.cc
-    # ---- platformSDL: shared by every back-end on SDL 2 (Linux and the web) ----
+    # ---- platformSDL: shared by every back-end on SDL3 (Linux and the web; ----
+    # ---- sdlGamepad.cpp is also compiled on Windows and macOS)            ----
+    ${TORQUE_SRC}/platformSDL/sdlGamepad.cpp
     ${TORQUE_SRC}/platformSDL/sdlInput.cpp
     ${TORQUE_SRC}/platformSDL/sdlMsgBox.cpp
     ${TORQUE_SRC}/platformSDL/sdlTextInput.cpp
@@ -217,8 +223,8 @@ set(TORQUE_PLATFORM_SOURCES_ANDROID
 # off it), swaps in platformNet_Emscripten.cpp, and sets the emcc link flags.
 # Networking back-end (platformNet_Emscripten.cpp) is swapped in from the engine
 # list in the root CMakeLists, not listed here. The canvas, its GL context and
-# all input come from SDL 2 (Emscripten's port), with the keyboard and text
-# through platformSDL, as on Linux. See cmake/BUILD-PLATFORM-NOTES.md.
+# all input come from SDL3 (Emscripten's port or vendored SDL3), with the keyboard,
+# text and controller input through platformSDL, as on Linux. See cmake/BUILD-PLATFORM-NOTES.md.
 set(TORQUE_PLATFORM_SOURCES_EMSCRIPTEN
     # ---- platformEmscripten ----
     ${TORQUE_SRC}/platformEmscripten/EmscriptenAlerts.cpp
@@ -247,8 +253,9 @@ set(TORQUE_PLATFORM_SOURCES_EMSCRIPTEN
     ${TORQUE_SRC}/platformEmscripten/main.cpp
     # ---- platformEmscripten/menus ----
     ${TORQUE_SRC}/platformEmscripten/menus/popupMenu.cpp
-    # ---- platformSDL: shared with Linux. Not sdlMsgBox.cpp: SDL 2 has no
-    # message box in a browser, so the web keeps EmscriptenAlerts.cpp. ----
+    # ---- platformSDL: shared with Linux. Not sdlMsgBox.cpp: Emscripten
+    # keeps EmscriptenAlerts.cpp for browser alerts. ----
+    ${TORQUE_SRC}/platformSDL/sdlGamepad.cpp
     ${TORQUE_SRC}/platformSDL/sdlInput.cpp
     ${TORQUE_SRC}/platformSDL/sdlTextInput.cpp
 )
